@@ -13,15 +13,16 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Animal)
 class AnimalAdmin(admin.ModelAdmin):
-    pass
+    list_display = ["__str__", "id_code", "name", "cohort"]
+    search_fields = ["id_code__istartswith"]
 
 
 Image = load_model(filer_settings.FILER_IMAGE_MODEL)
 
 
 class CustomImageAdmin(ImageAdmin):
-    # your custom code
-    pass
+    select_related = ["animal"]
+    autocomplete_fields = ["animal"]
 
 
 # Using build_fieldsets allows to easily integrate common field in the admin
