@@ -1,14 +1,18 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User
+from .models import User, Animal
 from filer.admin.imageadmin import ImageAdmin
-from django.apps import AppConfig
 from filer import settings as filer_settings
 from filer.utils.loader import load_model
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    pass
+
+
+@admin.register(Animal)
+class AnimalAdmin(admin.ModelAdmin):
     pass
 
 
@@ -24,7 +28,7 @@ class CustomImageAdmin(ImageAdmin):
 # Don't define fieldsets in the ModelAdmin above and add the custom fields
 # to the ``extra_main_fields`` or ``extra_fieldsets`` as shown below
 CustomImageAdmin.fieldsets = CustomImageAdmin.build_fieldsets(
-    extra_main_fields=("default_alt_text", "default_caption"),
+    extra_main_fields=("default_alt_text", "default_caption", "animal"),
     extra_fieldsets=(
         # (
         #     "Subject Location",
