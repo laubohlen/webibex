@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     "filer",
     "easy_thumbnails",
     "core",
-    "file_hub",
 ]
 
 MIDDLEWARE = [
