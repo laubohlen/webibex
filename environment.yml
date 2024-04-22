@@ -1,0 +1,15 @@
+name: wibex
+channels:
+    - conda-forge
+dependencies:
+    - python
+    - django
+    - django-allauth
+    - mysqldb
+    - Pillow
+    - pip
+     - pip:
+       - django-debug-toolbar
+       - django-filer
+       - django-filer\[heif\] # support .heic images
+       
