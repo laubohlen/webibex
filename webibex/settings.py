@@ -137,3 +137,5 @@ INTERNAL_IPS = [
 AUTH_USER_MODEL = "core.User"
 FILER_ENABLE_PERMISSIONS = True
 # FILER_IMAGE_MODEL = "core.CustomImage"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
