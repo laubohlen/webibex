@@ -21,11 +21,11 @@
             <a
                 class="!text-black underline"
                 href=""
-                >Gallery</a
+                >Home</a
             >
-            <li><a href="">Uplaod</a></li>
+            <li><a href="{% url 'upload' %}">Uplaod</a></li>
             <li><a href="">Identification</a></li>
-            <li><a href="">Profile</a></li>
+            <li><a href="{% url 'account_change_password' %}">Profile</a></li>
             <li><a href="{% url 'account_logout' %}">Sign Out</a></li>
             {% else %}
             <li><a href="{% url 'account_signup' %}">Sign Up</a></li>

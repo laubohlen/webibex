@@ -19,15 +19,17 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
-from core.views import welcome_view
+from core.views import welcome_view, upload_view
 
 admin.site.site_header = "Webibex Admin"
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
     path("filer/", include("filer.urls")),
     path("", welcome_view, name="welcome"),
+    path("upload/", upload_view, name="upload"),
 ]
 
 if settings.DEBUG:
