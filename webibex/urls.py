@@ -30,7 +30,7 @@ urlpatterns = [
     path("filer/", include("filer.urls")),
     path("", welcome_view, name="welcome"),
     path("upload/", upload_view, name="upload"),
-    path("home/", animal_view, name="animal-list"),
+    path("wibex-home/", animal_view, name="animal-list"),
 ]
 
 if settings.DEBUG:
