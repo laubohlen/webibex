@@ -20,7 +20,13 @@ class Animal(models.Model):
 
 
 class IbexImage(FilerBaseImage):
+    SIDE_CHOICES = {
+        ("L", "left"),
+        ("R", "right"),
+        ("O", "other"),
+    }
     animal = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, blank=True)
+    side = models.CharField(max_length=1, choices=SIDE_CHOICES, null=True, blank=True)
 
     class Meta(FilerBaseImage.Meta):
         # You must define a meta with en explicit app_label

@@ -29,7 +29,7 @@ class CustomImageAdmin(ImageAdmin):
 # Don't define fieldsets in the ModelAdmin above and add the custom fields
 # to the ``extra_main_fields`` or ``extra_fieldsets`` as shown below
 CustomImageAdmin.fieldsets = CustomImageAdmin.build_fieldsets(
-    extra_main_fields=("default_alt_text", "default_caption", "animal"),
+    extra_main_fields=("animal", "side"),
     extra_fieldsets=(
         # (
         #     "Subject Location",
