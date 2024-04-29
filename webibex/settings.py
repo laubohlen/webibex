@@ -148,3 +148,8 @@ FILER_IMAGE_MODEL = "core.IbexImage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 LOGIN_REDIRECT_URL = "/"
+FILER_ADD_FILE_VALIDATORS = {
+    "text/html": ["filer.validation.deny_html"],
+    "image/svg+xml": ["filer.validation.deny"],
+}
+FILER_MIME_TYPE_WHITELIST = ["image/png", "image/jpeg"]  # Exact mime type match
