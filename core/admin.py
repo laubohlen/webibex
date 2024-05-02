@@ -1,8 +1,11 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils.translation import gettext_lazy as _
 from .models import User, Animal
 from filer.admin.imageadmin import ImageAdmin
+from filer.admin.folderadmin import FolderAdmin
 from filer import settings as filer_settings
+from filer.models import Folder
 from filer.utils.loader import load_model
 
 
@@ -18,6 +21,71 @@ class AnimalAdmin(admin.ModelAdmin):
 
 
 Image = load_model(filer_settings.FILER_IMAGE_MODEL)
+# Folder = load_model(filer_settings.FILER_FOLDER_MODEL)
+
+
+class CustomFolderAdmin(FolderAdmin):
+    actions = [
+        "delete_files_or_folders",
+        "move_files_and_folders",
+        "copy_files_and_folders",
+        "resize_images",
+        "rename_files",
+        "tag_left",
+        "tag_right",
+        "tag_other",
+    ]
+
+    def tag_left(self, request, files_queryset, folders_queryset):
+        """
+        Action which updates 'side' tag of an IbexImage.
+        Manually updating each image object instead of using update() on the files_queryset,
+        becuase the files_queryset works general for all files and has no access to 'side'
+        of individual ibex images.
+        """
+        for f in files_queryset:
+            f.side = "L"
+            f.save()
+        self.message_user(
+            request, f"{len(files_queryset)} images we're successfully taged 'left'"
+        )
+        return None
+
+    def tag_right(self, request, files_queryset, folders_queryset):
+        """
+        Action which updates 'side' tag of an IbexImage.
+        Manually updating each image object instead of using update() on the files_queryset,
+        becuase the files_queryset works general for all files and has no access to 'side'
+        of individual ibex images.
+        """
+        for f in files_queryset:
+            f.side = "R"
+            f.save()
+        self.message_user(
+            request, f"{len(files_queryset)} images we're successfully taged 'right'"
+        )
+        return None
+
+    def tag_other(self, request, files_queryset, folders_queryset):
+        """
+        Action which updates 'side' tag of an IbexImage.
+        Manually updating each image object instead of using update() on the files_queryset,
+        becuase the files_queryset works general for all files and has no access to 'side'
+        of individual ibex images.
+        """
+        for f in files_queryset:
+            f.side = "O"
+            f.save()
+        self.message_user(
+            request, f"{len(files_queryset)} images we're successfully taged 'other'"
+        )
+        return None
+
+    pass
+
+
+admin.site.unregister(Folder)
+admin.site.register(Folder, CustomFolderAdmin)
 
 
 class CustomImageAdmin(ImageAdmin):
