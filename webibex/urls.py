@@ -19,7 +19,13 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
-from core.views import welcome_view, upload_view, animal_view
+from core.views import (
+    welcome_view,
+    upload_view,
+    observed_animal_view,
+    unobserved_animal_view,
+    test_view,
+)
 
 admin.site.site_header = "Webibex Admin"
 
@@ -30,8 +36,10 @@ urlpatterns = [
     path("filer/", include("filer.urls")),
     path("", welcome_view, name="welcome"),
     path("upload/", upload_view, name="upload"),
-    path("wibex-home/", animal_view, name="animal-list"),
+    path("observed/", observed_animal_view, name="observed-animals"),
+    path("unobserved/", unobserved_animal_view, name="unobserved-animals"),
 ]
 
 if settings.DEBUG:
+    urlpatterns += [path("test/", test_view, name="test")]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.urls import reverse
 from django.http import HttpResponseRedirect
+from django.db.models.aggregates import Count
 from .models import IbexImage, Animal
 
 
@@ -14,19 +15,32 @@ def upload_view(request):
     return HttpResponseRedirect(url)
 
 
-def animal_view(request):
-    # get all images that have an animal linked
-    identified_images = IbexImage.objects.filter(animal_id__isnull=False).values_list(
-        "animal_id"
-    )
-    # get all images that have no animal linked
-    # unidentified_images = Image.objects.filter(animal_id__isnull=True).values_list(
-    #     "animal_id"
-    # )
+def observed_animal_view(request):
     # get all animals that are linked to one or more images
-    animals = Animal.objects.filter(pk__in=identified_images)
+    animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
+        image_count__gt=0
+    )
     return render(
         request,
-        "core/animal_list.html",
+        "core/animal_table.html",
         {"animals": animals},
     )
+
+
+def unobserved_animal_view(request):
+    # get all animals that are not featured in any images
+    animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
+        image_count=0
+    )
+    return render(
+        request,
+        "core/animal_table.html",
+        {"animals": animals},
+    )
+
+
+def test_view(request):
+    queryset = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
+        image_count=1
+    )
+    return render(request, "core/test.html", {"queryset": queryset})
