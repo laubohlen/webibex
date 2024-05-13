@@ -15,6 +15,16 @@ def upload_view(request):
     return HttpResponseRedirect(url)
 
 
+def unidentified_images_view(request):
+    # get all images that are not linked to any animal
+    unidentified_images = IbexImage.objects.filter(animal_id__isnull=True)
+    return render(
+        request,
+        "core/unidentified_images.html",
+        {"images": unidentified_images},
+    )
+
+
 def observed_animal_view(request):
     # get all animals that are linked to one or more images
     animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(

@@ -25,6 +25,7 @@ from core.views import (
     observed_animal_view,
     unobserved_animal_view,
     test_view,
+    unidentified_images_view,
 )
 
 admin.site.site_header = "Webibex Admin"
@@ -38,6 +39,7 @@ urlpatterns = [
     path("upload/", upload_view, name="upload"),
     path("observed/", observed_animal_view, name="observed-animals"),
     path("unobserved/", unobserved_animal_view, name="unobserved-animals"),
+    path("unidentified/", unidentified_images_view, name="unidentified-images"),
 ]
 
 if settings.DEBUG:

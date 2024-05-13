@@ -24,7 +24,7 @@
                 >Home</a
             >
             <li><a href="{% url 'upload' %}">Uplaod</a></li>
-            <li><a href="">Identification</a></li>
+            <li><a href="{% url 'unidentified-images'%}">Identification</a></li>
             <li><a href="{% url 'account_change_password' %}">Profile</a></li>
             <li><a href="{% url 'account_logout' %}">Sign Out</a></li>
             {% else %}
