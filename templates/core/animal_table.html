@@ -16,6 +16,14 @@
             </tr>
         </thead>
         <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
+            <tr>
+                <td><a href="{% url 'unidentified-images'%}">unidentified</a></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>{{no_id_count}}</td>
+            </tr>
             {% for i in animals %}
             <tr>
                 <td><a href="">{{i.id_code}}</a></td>

@@ -30,10 +30,12 @@ def observed_animal_view(request):
     animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
         image_count__gt=0
     )
+    # get all images that are not linked to any animal
+    nr_unidentified_images = len(IbexImage.objects.filter(animal_id__isnull=True))
     return render(
         request,
         "core/animal_table.html",
-        {"animals": animals},
+        {"animals": animals, "no_id_count": nr_unidentified_images},
     )
 
 
@@ -50,7 +52,5 @@ def unobserved_animal_view(request):
 
 
 def test_view(request):
-    queryset = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
-        image_count=1
-    )
+    queryset = IbexImage.objects.all()
     return render(request, "core/test.html", {"queryset": queryset})
