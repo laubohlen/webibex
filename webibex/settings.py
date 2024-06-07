@@ -143,11 +143,19 @@ INTERNAL_IPS = [
     "127.0.0.1",
 ]
 AUTH_USER_MODEL = "core.User"
-FILER_ENABLE_PERMISSIONS = True
-FILER_IMAGE_MODEL = "core.IbexImage"
+LOGIN_REDIRECT_URL = "/"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
-LOGIN_REDIRECT_URL = "/"
+FILER_ENABLE_PERMISSIONS = True
+FILER_IMAGE_MODEL = "core.IbexImage"
+FILER_STORAGES = {
+    "public": {
+        "main": {
+            "UPLOAD_TO": "filer.utils.generate_filename.by_date",
+        },
+    },
+    # same for private, or not
+}
 FILER_ADD_FILE_VALIDATORS = {
     "text/html": ["filer.validation.deny_html"],
     "image/svg+xml": ["filer.validation.deny"],
