@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from filer.models.abstract import BaseImage as FilerBaseImage
 
+from collections import OrderedDict
+
 
 class User(AbstractUser):
     pass
@@ -20,11 +22,13 @@ class Animal(models.Model):
 
 
 class IbexImage(FilerBaseImage):
-    SIDE_CHOICES = {
-        ("L", "left"),
-        ("R", "right"),
-        ("O", "other"),
-    }
+    SIDE_CHOICES = OrderedDict(
+        [
+            ("L", "left"),
+            ("R", "right"),
+            ("O", "other"),
+        ]
+    )
     animal = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, blank=True)
     side = models.CharField(max_length=1, choices=SIDE_CHOICES, null=True, blank=True)
 
