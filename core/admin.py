@@ -1,17 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.contenttypes.admin import GenericTabularInline
 from django.utils.translation import gettext_lazy as _
-from .models import User, Animal
+
 from filer.admin.imageadmin import ImageAdmin
 from filer.admin.folderadmin import FolderAdmin
 from filer import settings as filer_settings
 from filer.models import Folder
 from filer.utils.loader import load_model
 
+from .models import User, Animal
+from simple_landmarks.models import LandmarkItem
+
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     pass
+
+
+class LandmarkInline(GenericTabularInline):
+    model = LandmarkItem
+    min_num = 0
+    max_num = 2
+    extra = 2
 
 
 @admin.register(Animal)
@@ -91,6 +102,7 @@ admin.site.register(Folder, CustomFolderAdmin)
 class CustomImageAdmin(ImageAdmin):
     select_related = ["animal"]
     autocomplete_fields = ["animal"]
+    inlines = [LandmarkInline]
 
 
 # Using build_fieldsets allows to easily integrate common field in the admin
