@@ -2,7 +2,10 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.http import HttpResponseRedirect
 from django.db.models.aggregates import Count
-from .models import IbexImage, Animal
+from django.contrib.contenttypes.models import ContentType
+
+from core.models import IbexImage, Animal
+from simple_landmarks.models import LandmarkItem
 
 
 def welcome_view(request):
@@ -52,5 +55,9 @@ def unobserved_animal_view(request):
 
 
 def test_view(request):
-    queryset = IbexImage.objects.all()
+    content_type = ContentType.objects.get_for_model(IbexImage)
+
+    queryset = LandmarkItem.objects.select_related("landmark").filter(
+        content_type=content_type
+    )
     return render(request, "core/test.html", {"queryset": queryset})
