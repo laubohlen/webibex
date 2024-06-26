@@ -2,7 +2,7 @@ import os
 import datetime
 
 from django.dispatch import receiver
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.utils.encoding import force_str
 from django.utils.timezone import now
 from django.utils.text import get_valid_filename as get_valid_filename_django
@@ -52,3 +52,13 @@ def initialise_landmark_items(sender, instance, created, **kwargs):
             )
     else:
         pass
+
+
+@receiver(post_delete, sender=IbexImage)
+def delete_landmark_items(sender, instance, **kwargs):
+    image = instance
+    content_type = ContentType.objects.get_for_model(IbexImage)
+    landmark_items = LandmarkItem.objects.filter(
+        content_type=content_type, object_id=image.id
+    )
+    landmark_items.delete()
