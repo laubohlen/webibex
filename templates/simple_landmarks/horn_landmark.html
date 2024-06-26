@@ -1,0 +1,19 @@
+{% extends 'layouts/empty_fixed.html' %} {% block content %}
+<h1 class="mt-4 mb-4 flex items-center justify-center">
+    Annotation tasks:&nbsp;<button class="h1HightlightGreen">horn_tip</button>,&nbsp;
+    <a
+        class="hiddenLink"
+        href="{% url 'landmark-eye' oid=image.id %}"
+        >eye_corner</a
+    >
+</h1>
+<p class="flex items-center justify-center">Click on the very <span class="underline mx-4">tip of the horn</span> that is facing you</p>
+<a href="{% url 'landmark-eye' oid=image.id %}">
+    <!-- ismap makes image clickable, sends pixel coordinates to server -->
+    <img
+        class="imageToLandmark"
+        src="{{image.canonical_url}}"
+        ismap
+    />
+</a>
+{% endblock %}
