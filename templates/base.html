@@ -2,11 +2,21 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+        />
         <script src="https://cdn.tailwindcss.com"></script>
         <title>Wibex</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            rel="preconnect"
+            href="https://fonts.googleapis.com"
+        />
+        <link
+            rel="preconnect"
+            href="https://fonts.gstatic.com"
+            crossorigin
+        />
         <link
             href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap"
             rel="stylesheet"
@@ -32,9 +42,48 @@
                 /* border-radius: 0rem;
                 box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); */
                 margin-bottom: 1rem;
-                background-color: white;
+                background-color: lightblue;
                 padding-bottom: 1rem;
                 width: 100%;
+            }
+            .fixedContainer {
+                /* size doesnt change when window size changes */
+                overflow: hidden;
+                position: relative;
+                margin-bottom: 1rem;
+                padding-bottom: 1rem;
+                padding-top: 1rem;
+                padding-left: 1rem;
+                padding-right: 1rem;
+                width: 1500px;
+                height: auto;
+                margin: 0 auto 1em auto; /*Center the image*/
+            }
+            .h1HightlightGreen {
+                line-height: 1;
+                font-weight: bold;
+                font-family: "IBM Plex Mono";
+                font-size: x-large;
+                background: springgreen;
+                text-decoration: none;
+                color: black;
+            }
+            .h1HightlightPink {
+                line-height: 1;
+                font-weight: bold;
+                font-family: "IBM Plex Mono";
+                font-size: x-large;
+                background: fuchsia;
+                text-decoration: none;
+                color: black;
+            }
+            .imageToLandmark {
+                margin-top: 4;
+                cursor: default;
+            }
+            .hiddenLink {
+                color: black;
+                text-decoration: none;
             }
             html,
             body {
@@ -44,6 +93,7 @@
             h1 {
                 font-family: "IBM Plex Mono";
                 font-weight: bold;
+                font-size: x-large;
             }
             p {
                 font-family: "IBM Plex Mono";
@@ -122,7 +172,6 @@
         </style>
     </head>
     <body class="">
-        {% include 'includes/header.html' %} {% block layout %} {% endblock %}
-        {% include 'includes/footer.html' %}
+        {% include 'includes/header.html' %} {% block layout %} {% endblock %} {% include 'includes/footer.html' %}
     </body>
 </html>
