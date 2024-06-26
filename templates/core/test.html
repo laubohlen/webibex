@@ -11,8 +11,8 @@
     <body>
         <ul>
             {% for item in queryset %}
-            <li>{{ item.content_object.original_filename }}</li>
-            {% endfor %}
+            <!-- <li>{{ item.content_object.original_filename }}</li> -->
+            {{ item }} {% endfor %}
         </ul>
     </body>
 </html>
