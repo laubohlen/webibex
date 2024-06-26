@@ -18,15 +18,8 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path, include
-from core.views import (
-    welcome_view,
-    upload_view,
-    observed_animal_view,
-    unobserved_animal_view,
-    test_view,
-    unidentified_images_view,
-)
+from django.urls import path, include, re_path
+from core.views import *
 
 admin.site.site_header = "Webibex Admin"
 
@@ -40,6 +33,11 @@ urlpatterns = [
     path("observed/", observed_animal_view, name="observed-animals"),
     path("unobserved/", unobserved_animal_view, name="unobserved-animals"),
     path("unidentified/", unidentified_images_view, name="unidentified-images"),
+    path("to-landmark/", to_landmark_images_view, name="to-landmark"),
+    re_path(
+        r"^landmark_horn/(?P<oid>[0-9]+)/$", landmark_horn_view, name="landmark-horn"
+    ),
+    re_path(r"^landmark_eye/(?P<oid>[0-9]+)/$", landmark_eye_view, name="landmark-eye"),
 ]
 
 if settings.DEBUG:
