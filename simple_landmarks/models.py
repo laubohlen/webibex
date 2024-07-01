@@ -12,7 +12,7 @@ class Landmark(models.Model):
 
 class LandmarkItem(models.Model):
     landmark = models.ForeignKey(Landmark, on_delete=models.CASCADE)
-    x_coordinate = models.PositiveBigIntegerField(null=True, blank=True)
+    x_coordinate = models.PositiveIntegerField(null=True, blank=True)
     y_coordinate = models.PositiveIntegerField(null=True, blank=True)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
