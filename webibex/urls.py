@@ -38,6 +38,11 @@ urlpatterns = [
         r"^landmark_horn/(?P<oid>[0-9]+)/$", landmark_horn_view, name="landmark-horn"
     ),
     re_path(r"^landmark_eye/(?P<oid>[0-9]+)/$", landmark_eye_view, name="landmark-eye"),
+    re_path(
+        r"^finished_landmarks/(?P<oid>[0-9]+)/$",
+        finished_landmark_view,
+        name="finished-landmarks",
+    ),
 ]
 
 if settings.DEBUG:

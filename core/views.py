@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.http import HttpResponseRedirect
 from django.db.models.aggregates import Count
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.decorators import login_required
 
 from core.models import IbexImage, Animal
 from simple_landmarks.models import LandmarkItem, Landmark
@@ -33,6 +34,7 @@ def upload_view(request):
     return HttpResponseRedirect(url)
 
 
+@login_required
 def unidentified_images_view(request):
     # get all images that are not linked to any animal
     unidentified_images = IbexImage.objects.filter(animal_id__isnull=True)
@@ -43,6 +45,7 @@ def unidentified_images_view(request):
     )
 
 
+@login_required
 def observed_animal_view(request):
     # get all animals that are linked to one or more images
     animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
@@ -57,6 +60,7 @@ def observed_animal_view(request):
     )
 
 
+@login_required
 def unobserved_animal_view(request):
     # get all animals that are not featured in any images
     animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
@@ -69,6 +73,7 @@ def unobserved_animal_view(request):
     )
 
 
+@login_required
 def to_landmark_images_view(request):
     # get all images that dont feature any landmarks AND are not featured to any animal
     images_to_landmark = IbexImage.objects.filter(animal_id__isnull=True)
@@ -79,6 +84,7 @@ def to_landmark_images_view(request):
     )
 
 
+@login_required
 def landmark_horn_view(request, oid):
     image = IbexImage.objects.filter(id=oid).first()
     return render(
@@ -88,50 +94,66 @@ def landmark_horn_view(request, oid):
     )
 
 
+@login_required
 def landmark_eye_view(request, oid):
     x_horn, y_horn = parse_coordinates(request)
 
     # save horn-landmark for that image
     landmark_id = Landmark.objects.get(label="horn_tip").id
     content_type = ContentType.objects.get_for_model(IbexImage)
-    landmark_item = get_object_or_404(
+    horn_landmark = get_object_or_404(
         LandmarkItem,
         content_type=content_type,
         object_id=oid,
         landmark_id=landmark_id,
     )
-    landmark_item.x_coordinate = x_horn
-    landmark_item.y_coordinate = y_horn
-    landmark_item.save()
+    horn_landmark.x_coordinate = x_horn
+    horn_landmark.y_coordinate = y_horn
+    horn_landmark.save()
 
     # render eye_landmark page
     image = IbexImage.objects.filter(id=oid).first()
     return render(
         request,
         "simple_landmarks/eye_landmark.html",
-        {"image": image},
+        {"image": image, "horn_landmark": horn_landmark},
     )
 
 
+@login_required
 def finished_landmark_view(request, oid):
     x_eye, y_eye = parse_coordinates(request)
 
     # save eye-landmark for that image
-    landmark_id = Landmark.objects.get(label="eye_corner").id
+    eye_landmark_id = Landmark.objects.get(label="eye_corner").id
     content_type = ContentType.objects.get_for_model(IbexImage)
-    landmark_item = get_object_or_404(
+    eye_landmark = get_object_or_404(
         LandmarkItem,
         content_type=content_type,
         object_id=oid,
-        landmark_id=landmark_id,
+        landmark_id=eye_landmark_id,
     )
-    landmark_item.x_coordinate = x_eye
-    landmark_item.y_coordinate = y_eye
-    landmark_item.save()
+    eye_landmark.x_coordinate = x_eye
+    eye_landmark.y_coordinate = y_eye
+    eye_landmark.save()
 
-    # return view of the landmarks on the image
-    # together with confirmation button
-    pass
+    # render landmarks on image
+    image = IbexImage.objects.filter(id=oid).first()
+    horn_landmark_id = Landmark.objects.get(label="horn_tip").id
+    horn_landmark = get_object_or_404(
+        LandmarkItem,
+        content_type=content_type,
+        object_id=oid,
+        landmark_id=horn_landmark_id,
+    )
+    image_ratio = image.width / image.height
+    # displayed_width = 1500  # set at base.html > .fixedContainer
+    # displayed_height = displayed_width / image_ratio  # set to auto
+    return render(
+        request,
+        "simple_landmarks/finished_landmarks.html",
+        {"image": image, "horn_landmark": horn_landmark, "eye_landmark": eye_landmark},
+    )
 
 
 def test_view(request):
