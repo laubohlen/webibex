@@ -1,26 +1,31 @@
-{% extends 'layouts/empty_fixed.html' %} {% block content %}
-<h1 class="mt-4 mb-4 flex items-center justify-center">
-    Annotation tasks:&nbsp;<a
-        class="hiddenLink"
-        href="{% url 'landmark-horn' oid=image.id %}"
-        >horn_tip</a
-    >,&nbsp; eye_corner
-</h1>
-<p class="flex items-center justify-center">Confirm landmarks</p>
-<div class="drawOnImage">
-    <div
-        class="greenDot"
-        style="top: calc({{horn_landmark.y_coordinate}}px - 4px); left: calc({{horn_landmark.x_coordinate}}px - 4px)"
-    ></div>
-    <div
-        class="pinkDot"
-        style="top: calc({{eye_landmark.y_coordinate}}px - 4px); left: calc({{eye_landmark.x_coordinate}}px - 4px)"
-    ></div>
-    <a href="">
-        <img
-            class="imageToLandmark"
-            src="{{image.url}}"
-        />
-    </a>
-</div>
+{% extends 'base.html' %} {% block layout %}
+<main
+    class="fixedContainer"
+    style="width: {{display_width}}px"
+>
+    <h1 class="mt-4 mb-4 flex items-center justify-center">
+        Annotation tasks:&nbsp;<a
+            class="hiddenLink"
+            href="{% url 'landmark-horn' oid=image.id %}"
+            >horn_tip</a
+        >,&nbsp; eye_corner
+    </h1>
+    <p class="flex items-center justify-center">Confirm landmarks</p>
+    <div class="drawOnImage">
+        <div
+            class="greenDot"
+            style="top: calc({{y_horn_scaled}}px - 4px); left: calc({{x_horn_scaled}}px - 4px)"
+        ></div>
+        <div
+            class="pinkDot"
+            style="top: calc({{y_eye_scaled}}px - 4px); left: calc({{x_eye_scaled}}px - 4px)"
+        ></div>
+        <a href="">
+            <img
+                class="imageToLandmark"
+                src="{{image.url}}"
+            />
+        </a>
+    </div>
+</main>
 {% endblock %}

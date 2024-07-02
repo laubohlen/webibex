@@ -1,24 +1,29 @@
-{% extends 'layouts/empty_fixed.html' %} {% block content %}
-<h1 class="mt-4 mb-4 flex items-center justify-center">
-    Annotation tasks:&nbsp;<a
-        class="hiddenLink"
-        href="{% url 'landmark-horn' oid=image.id %}"
-        >horn_tip</a
-    >,&nbsp;<button class="h1HightlightPink">eye_corner</button>
-</h1>
-<p class="flex items-center justify-center">Click on the <span class="mx-4 underline"> right hand corner </span> of the eye</p>
-<div class="drawOnImage">
-    <a href="{% url 'finished-landmarks' oid=image.id %}">
-        <div
-            class="greenDot"
-            style="top: calc({{horn_landmark.y_coordinate}}px - 4px); left: calc({{horn_landmark.x_coordinate}}px - 4px)"
-        ></div>
-        <!-- ismap makes image clickable, sends pixel coordinates to server -->
-        <img
-            class="imageToLandmark"
-            src="{{image.url}}"
-            ismap
-        />
-    </a>
-</div>
+{% extends 'base.html' %} {% block layout %}
+<main
+    class="fixedContainer"
+    style="width: {{display_width}}px"
+>
+    <h1 class="mt-4 mb-4 flex items-center justify-center">
+        Annotation tasks:&nbsp;<a
+            class="hiddenLink"
+            href="{% url 'landmark-horn' oid=image.id %}"
+            >horn_tip</a
+        >,&nbsp;<button class="h1HightlightPink">eye_corner</button>
+    </h1>
+    <p class="flex items-center justify-center">Click on the <span class="mx-4 underline"> right hand corner </span> of the eye</p>
+    <div class="drawOnImage">
+        <a href="{% url 'finished-landmarks' oid=image.id %}">
+            <div
+                class="greenDot"
+                style="top: calc({{y_horn_scaled}}px - 4px); left: calc({{x_horn_scaled}}px - 4px)"
+            ></div>
+            <!-- ismap makes image clickable, sends pixel coordinates to server -->
+            <img
+                class="imageToLandmark"
+                src="{{image.url}}"
+                ismap
+            />
+        </a>
+    </div>
+</main>
 {% endblock %}

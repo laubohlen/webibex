@@ -4,9 +4,13 @@ from django.http import HttpResponseRedirect
 from django.db.models.aggregates import Count
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 
 from core.models import IbexImage, Animal
 from simple_landmarks.models import LandmarkItem, Landmark
+
+from pathlib import Path
+from PIL import Image
 
 
 # snipet from https://github.com/krasch/simple_landmarks
@@ -22,6 +26,12 @@ def parse_coordinates(request):
     x = int(x)
     y = int(y)
     return x, y
+
+
+# image was not displayed in original size -> need to convert the coordinates
+def scale_coordinate(x: int, y: int, dst_image_width: int, src_image_width: int):
+    scale = dst_image_width / src_image_width
+    return int(x * scale), int(y * scale)
 
 
 def welcome_view(request):
@@ -90,13 +100,18 @@ def landmark_horn_view(request, oid):
     return render(
         request,
         "simple_landmarks/horn_landmark.html",
-        {"image": image},
+        {"image": image, "display_width": settings.LANDMARK_IMAGE_WIDTH},
     )
 
 
 @login_required
 def landmark_eye_view(request, oid):
-    x_horn, y_horn = parse_coordinates(request)
+    image = IbexImage.objects.filter(id=oid).first()
+
+    x_horn_scaled, y_horn_scaled = parse_coordinates(request)
+    x_horn, y_horn = scale_coordinate(
+        x_horn_scaled, y_horn_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
+    )
 
     # save horn-landmark for that image
     landmark_id = Landmark.objects.get(label="horn_tip").id
@@ -110,20 +125,27 @@ def landmark_eye_view(request, oid):
     horn_landmark.x_coordinate = x_horn
     horn_landmark.y_coordinate = y_horn
     horn_landmark.save()
-
+    print("parsed:", x_horn_scaled, y_horn_scaled)
     # render eye_landmark page
-    image = IbexImage.objects.filter(id=oid).first()
     return render(
         request,
         "simple_landmarks/eye_landmark.html",
-        {"image": image, "horn_landmark": horn_landmark},
+        {
+            "image": image,
+            "x_horn_scaled": x_horn_scaled,
+            "y_horn_scaled": y_horn_scaled,
+            "display_width": settings.LANDMARK_IMAGE_WIDTH,
+        },
     )
 
 
 @login_required
 def finished_landmark_view(request, oid):
-    x_eye, y_eye = parse_coordinates(request)
-
+    image = IbexImage.objects.filter(id=oid).first()
+    x_eye_scaled, y_eye_scaled = parse_coordinates(request)
+    x_eye, y_eye = scale_coordinate(
+        x_eye_scaled, y_eye_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
+    )
     # save eye-landmark for that image
     eye_landmark_id = Landmark.objects.get(label="eye_corner").id
     content_type = ContentType.objects.get_for_model(IbexImage)
@@ -138,7 +160,6 @@ def finished_landmark_view(request, oid):
     eye_landmark.save()
 
     # render landmarks on image
-    image = IbexImage.objects.filter(id=oid).first()
     horn_landmark_id = Landmark.objects.get(label="horn_tip").id
     horn_landmark = get_object_or_404(
         LandmarkItem,
@@ -146,13 +167,24 @@ def finished_landmark_view(request, oid):
         object_id=oid,
         landmark_id=horn_landmark_id,
     )
-    image_ratio = image.width / image.height
-    # displayed_width = 1500  # set at base.html > .fixedContainer
-    # displayed_height = displayed_width / image_ratio  # set to auto
+    x_horn = horn_landmark.x_coordinate
+    y_horn = horn_landmark.y_coordinate
+    x_horn_scaled, y_horn_scaled = scale_coordinate(
+        x_horn, y_horn, settings.LANDMARK_IMAGE_WIDTH, image.width
+    )
+    print("og:", x_horn, y_horn)
+    print("reversed:", x_horn_scaled, y_horn_scaled)
     return render(
         request,
         "simple_landmarks/finished_landmarks.html",
-        {"image": image, "horn_landmark": horn_landmark, "eye_landmark": eye_landmark},
+        {
+            "image": image,
+            "x_horn_scaled": x_horn_scaled,
+            "y_horn_scaled": y_horn_scaled,
+            "x_eye_scaled": x_eye_scaled,
+            "y_eye_scaled": y_eye_scaled,
+            "display_width": settings.LANDMARK_IMAGE_WIDTH,
+        },
     )
 
 

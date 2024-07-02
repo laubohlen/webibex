@@ -162,3 +162,4 @@ FILER_ADD_FILE_VALIDATORS = {
     "image/svg+xml": ["filer.validation.deny"],
 }
 FILER_MIME_TYPE_WHITELIST = ["image/png", "image/jpeg"]  # Exact mime type match
+LANDMARK_IMAGE_WIDTH = 1500  # pixels
