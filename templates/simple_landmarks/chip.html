@@ -1,0 +1,15 @@
+{% extends 'base.html' %} {% block layout %}
+<main
+    class="fixedContainer"
+    style="width: {{display_width}}px"
+>
+    <!-- ismap makes image clickable, sends pixel coordinates to server -->
+    <div class="flex items-center justify-center"><img class="imageToLandmark"
+        src="{{chip}}"
+        {% comment %} usemap="#chip" {% endcomment %}
+    /></div>
+    {% comment %} <map name="chip">
+        <area shape="rect" coords="{{eye_x}}, {{eye_y}}, {{horn_x}}, {{horn_y}}"></area>
+    </map> {% endcomment %}
+</main>
+{% endblock %}
