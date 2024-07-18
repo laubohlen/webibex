@@ -43,6 +43,7 @@ urlpatterns = [
         finished_landmark_view,
         name="finished-landmarks",
     ),
+    re_path(r"^chip/(?P<oid>[0-9]+)/$", chip_view, name="chip"),
 ]
 
 if settings.DEBUG:
