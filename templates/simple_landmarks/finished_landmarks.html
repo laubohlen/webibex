@@ -10,8 +10,11 @@
             >horn_tip</a
         >,&nbsp; eye_corner
     </h1>
-    <p class="flex items-center justify-center">Confirm landmarks</p>
+    <p class="flex items-center justify-center">
+        <a href="{% url 'chip' oid=image.id %}"><button>Confirm</button></a>&nbsp;landmarks?
+    </p>
     <div class="drawOnImage">
+        <!-- 4 px offset to center the displayed point (point width = 8px) -->
         <div
             class="greenDot"
             style="top: calc({{y_horn_scaled}}px - 4px); left: calc({{x_horn_scaled}}px - 4px)"
