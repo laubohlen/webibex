@@ -1,3 +1,9 @@
+import os
+import cv2
+import math
+import shutil
+import numpy as np
+
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
 from django.http import HttpResponseRedirect
@@ -31,7 +37,12 @@ def parse_coordinates(request):
 # image was not displayed in original size -> need to convert the coordinates
 def scale_coordinate(x: int, y: int, dst_image_width: int, src_image_width: int):
     scale = dst_image_width / src_image_width
-    return int(x * scale), int(y * scale)
+    return round(x * scale), round(y * scale)
+
+
+# mirror coordinate along the x-axis when right horn is flipped to be normalised as a left horn
+def mirror_coordinate(x: int, src_image_width: int):
+    return round(src_image_width - x)
 
 
 def welcome_view(request):
@@ -85,8 +96,10 @@ def unobserved_animal_view(request):
 
 @login_required
 def to_landmark_images_view(request):
-    # get all images that dont feature any landmarks AND are not featured to any animal
-    images_to_landmark = IbexImage.objects.filter(animal_id__isnull=True)
+    # get all images that have no animal ID and that do have a side tag
+    images_to_landmark = IbexImage.objects.filter(animal_id__isnull=True).filter(
+        side__isnull=False
+    )
     return render(
         request,
         "core/to_landmark.html",
@@ -112,7 +125,6 @@ def landmark_eye_view(request, oid):
     x_horn, y_horn = scale_coordinate(
         x_horn_scaled, y_horn_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
     )
-
     # save horn-landmark for that image
     landmark_id = Landmark.objects.get(label="horn_tip").id
     content_type = ContentType.objects.get_for_model(IbexImage)
@@ -125,7 +137,7 @@ def landmark_eye_view(request, oid):
     horn_landmark.x_coordinate = x_horn
     horn_landmark.y_coordinate = y_horn
     horn_landmark.save()
-    print("parsed:", x_horn_scaled, y_horn_scaled)
+
     # render eye_landmark page
     return render(
         request,
@@ -172,8 +184,6 @@ def finished_landmark_view(request, oid):
     x_horn_scaled, y_horn_scaled = scale_coordinate(
         x_horn, y_horn, settings.LANDMARK_IMAGE_WIDTH, image.width
     )
-    print("og:", x_horn, y_horn)
-    print("reversed:", x_horn_scaled, y_horn_scaled)
     return render(
         request,
         "simple_landmarks/finished_landmarks.html",
@@ -184,6 +194,145 @@ def finished_landmark_view(request, oid):
             "x_eye_scaled": x_eye_scaled,
             "y_eye_scaled": y_eye_scaled,
             "display_width": settings.LANDMARK_IMAGE_WIDTH,
+            # "x_horn_scaled": x_horn,
+            # "y_horn_scaled": y_horn,
+            # "x_eye_scaled": x_eye,
+            # "y_eye_scaled": y_eye,
+            # "display_width": image.width,
+        },
+    )
+
+
+# load an image as an rgb numpy array
+def load_image(filename):
+    # load image from file
+    cv2image = cv2.imread(filename)
+    # convert to RGB
+    cv2image = cv2.cvtColor(cv2image, cv2.COLOR_BGR2RGB)  # cv2 loads as BGR
+    return cv2image
+
+
+def similarityTransform(inPoints, outPoints):
+    s60 = math.sin(60 * math.pi / 180)
+    c60 = math.cos(60 * math.pi / 180)
+
+    inPts = np.copy(inPoints).tolist()
+    outPts = np.copy(outPoints).tolist()
+
+    xin = (
+        c60 * (inPts[0][0] - inPts[1][0])
+        - s60 * (inPts[0][1] - inPts[1][1])
+        + inPts[1][0]
+    )
+    yin = (
+        s60 * (inPts[0][0] - inPts[1][0])
+        + c60 * (inPts[0][1] - inPts[1][1])
+        + inPts[1][1]
+    )
+
+    inPts.append([round(xin), round(yin)])
+
+    xout = (
+        c60 * (outPts[0][0] - outPts[1][0])
+        - s60 * (outPts[0][1] - outPts[1][1])
+        + outPts[1][0]
+    )
+    yout = (
+        s60 * (outPts[0][0] - outPts[1][0])
+        + c60 * (outPts[0][1] - outPts[1][1])
+        + outPts[1][1]
+    )
+
+    outPts.append([round(xout), round(yout)])
+
+    tform = cv2.estimateAffinePartial2D(np.array([inPts]), np.array([outPts]))
+
+    return tform[0]
+
+
+def get_chip_filename(filename: str, dst_ext: str):  # path of file or filename
+    chip_name = os.path.split(filename)[1]
+    name, ext = os.path.splitext(chip_name)
+    chip_name = name + "_chip" + "." + dst_ext
+    return chip_name
+
+
+@login_required
+def chip_view(request, oid):
+    image = IbexImage.objects.filter(id=oid).first()
+    image_path = os.path.join(settings.MEDIA_ROOT, image.file.name)
+    chip_name = get_chip_filename(image.file.name, settings.CHIP_FILETYPE)
+    chip_url = os.path.join(os.path.split(image.url)[0], chip_name)
+    chip_path = os.path.join(os.path.split(image_path)[0], chip_name)
+    shutil.copy2(image_path, chip_path)  # try to preserve all metadata
+
+    # load image
+    img = load_image(chip_path)
+
+    # load landmarks
+    content_type = ContentType.objects.get_for_model(IbexImage)
+    horn_landmark_id = Landmark.objects.get(label="horn_tip").id
+    horn_landmark = get_object_or_404(
+        LandmarkItem,
+        content_type=content_type,
+        object_id=oid,
+        landmark_id=horn_landmark_id,
+    )
+    eye_landmark_id = Landmark.objects.get(label="eye_corner").id
+    eye_landmark = get_object_or_404(
+        LandmarkItem,
+        content_type=content_type,
+        object_id=oid,
+        landmark_id=eye_landmark_id,
+    )
+    eyehorn_src = [
+        [eye_landmark.x_coordinate, eye_landmark.y_coordinate],
+        [horn_landmark.x_coordinate, horn_landmark.y_coordinate],
+    ]
+
+    # check animal side
+    # flip image if it is right taged
+    if image.side == "R":
+        img = cv2.flip(img, 1)  # along x-axis = around y-axis
+        # flip x-coordinates
+        eyehorn_src[0][0] = mirror_coordinate(eyehorn_src[0][0], image.width)
+        eyehorn_src[1][0] = mirror_coordinate(eyehorn_src[1][0], image.width)
+
+    # calculate coordniates where horn and eye should be in the output image
+    width_dst = settings.CHIP_WIDTH
+    height_dst = settings.CHIP_HEIGHT
+    eye_dst = (np.round(width_dst * 0.98), np.round(height_dst * 0.95))
+    tip_dst = (np.round(width_dst * 0.98), np.round(height_dst * 0.05))
+    eyehorn_dst = [eye_dst, tip_dst]
+
+    # affine transform image
+    tform = similarityTransform(eyehorn_src, eyehorn_dst)
+    # note, height and width are exchanged here because we want a
+    # horizontal image first
+    shape_dst = (width_dst, height_dst)
+    img_transformed = cv2.warpAffine(img, tform, shape_dst)
+
+    # save
+    cv2.imwrite(chip_path, cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
+
+    eye_x_scaled, eye_y_scaled = scale_coordinate(
+        eye_landmark.x_coordinate,
+        eye_landmark.y_coordinate,
+        settings.LANDMARK_IMAGE_WIDTH,
+        image.width,
+    )
+    horn_x_scaled, horn_y_scaled = scale_coordinate(
+        horn_landmark.x_coordinate,
+        horn_landmark.y_coordinate,
+        settings.LANDMARK_IMAGE_WIDTH,
+        image.width,
+    )
+
+    return render(
+        request,
+        "simple_landmarks/chip.html",
+        {
+            "chip": chip_url,
         },
     )
 
