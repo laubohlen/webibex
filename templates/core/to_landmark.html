@@ -4,12 +4,33 @@
         <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
             <tr>
                 <th>file_name</th>
+                <th>side</th>
+                <th>chip</th>
+                <th>id</th>
             </tr>
         </thead>
         <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
             {% for i in images %}
             <tr>
+                {% if i.side %}
                 <td><a href="{% url 'landmark-horn' oid=i.id %}">{{i.name}}</a></td>
+                {% else %}
+                <td>{{i.name}}</td>
+                {% endif %}
+                <td>{{i.side}}</td>
+                {% if i.ibexchip.ibex_image_id %}
+                <td><a href="{{ i.ibexchip.url }}">ok</a></td>
+                <td>
+                    <a
+                        href="{% url 'to-landmark' %}"
+                        class="button"
+                        >run</a
+                    >
+                </td>
+                {% else %}
+                <td>-</td>
+                <td>-</td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>
