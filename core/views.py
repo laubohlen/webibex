@@ -12,7 +12,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 
-from core.models import IbexImage, Animal
+from core.models import IbexImage, IbexChip, Animal
 from simple_landmarks.models import LandmarkItem, Landmark
 
 from pathlib import Path
@@ -96,10 +96,8 @@ def unobserved_animal_view(request):
 
 @login_required
 def to_landmark_images_view(request):
-    # get all images that have no animal ID and that do have a side tag
-    images_to_landmark = IbexImage.objects.filter(animal_id__isnull=True).filter(
-        side__isnull=False
-    )
+    # get all images that have no animal ID
+    images_to_landmark = IbexImage.objects.filter(animal_id__isnull=True)
     return render(
         request,
         "core/to_landmark.html",
@@ -263,8 +261,17 @@ def chip_view(request, oid):
     image_path = os.path.join(settings.MEDIA_ROOT, image.file.name)
     chip_name = get_chip_filename(image.file.name, settings.CHIP_FILETYPE)
     chip_url = os.path.join(os.path.split(image.url)[0], chip_name)
-    chip_path = os.path.join(os.path.split(image_path)[0], chip_name)
-    shutil.copy2(image_path, chip_path)  # try to preserve all metadata
+    chip_path = Path(os.path.join(os.path.split(image_path)[0], chip_name))
+
+    # if a chip exists already, delete it before continuing
+    if chip_path.is_file():
+        chip_path.unlink()
+        # also update database
+        ibex_chip = IbexChip.objects.filter(ibex_image_id=image.id)
+        ibex_chip.delete()
+
+    # create new chip from original image and try to preserve all metadata
+    shutil.copy2(image_path, chip_path)
 
     # load image
     img = load_image(chip_path)
@@ -315,6 +322,10 @@ def chip_view(request, oid):
     # save
     cv2.imwrite(chip_path, cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
 
+    # update database
+    chip_file = os.path.join(os.path.split(str(image.file.name))[0], chip_name)
+    IbexChip.objects.create(file=chip_file, ibex_image_id=image.id)
+
     eye_x_scaled, eye_y_scaled = scale_coordinate(
         eye_landmark.x_coordinate,
         eye_landmark.y_coordinate,
@@ -331,17 +342,10 @@ def chip_view(request, oid):
     return render(
         request,
         "simple_landmarks/chip.html",
-        {
-            "chip": chip_url,
-        },
+        {"chip": chip_url, "side": image.side},
     )
 
 
 def test_view(request):
-    content_type = ContentType.objects.get_for_model(IbexImage)
-
-    queryset = LandmarkItem.objects.select_related("landmark").filter(
-        content_type=content_type,
-        object_id=198,
-    )
+    queryset = IbexImage.objects.all()
     return render(request, "core/test.html", {"queryset": queryset})
