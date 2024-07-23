@@ -4,28 +4,31 @@
         <a
             class="!text-black underline"
             href="{% url 'observed-animals' %}"
-            >Wibex</a
+            >Animals</a
         >
         {% else %}
         <a
             class="!text-black underline"
             href=""
-            >Wibex</a
+            >Animals</a
         >
         {% endif %}
     </div>
     <nav>
         <ul class="flex items-center gap-6">
+            {% comment %}
             <li>|</li>
-            {% if user.is_authenticated %}
+            {% endcomment %} {% if user.is_authenticated %} {% comment %}
             <a
                 class="!text-black underline"
                 href=""
                 >Home</a
             >
-            <li><a href="{% url 'upload' %}">Uplaod</a></li>
-            <li><a href="{% url 'to-landmark' %}">Landmark</a></li>
-            <li><a href="{% url 'unidentified-images'%}">Identification</a></li>
+            {% endcomment %}
+            <li><a href="{% url 'upload' %}">Images</a></li>
+            <li><a href="{% url 'to-landmark' %}">Identification</a></li>
+            <li><a href="{% url 'unidentified-images'%}">Results</a></li>
+            <li>|</li>
             <li><a href="{% url 'account_change_password' %}">Profile</a></li>
             <li><a href="{% url 'account_logout' %}">Sign Out</a></li>
             {% else %}
