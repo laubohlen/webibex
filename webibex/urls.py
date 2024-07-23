@@ -21,11 +21,11 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from core.views import *
 
-admin.site.site_header = "Webibex Admin"
+admin.site.site_header = "Webibex"
 
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("webibex/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
     path("filer/", include("filer.urls")),
     path("", welcome_view, name="welcome"),
