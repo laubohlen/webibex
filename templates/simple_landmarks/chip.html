@@ -4,10 +4,14 @@
     style="width: {{display_width}}px"
 >
     <!-- ismap makes image clickable, sends pixel coordinates to server -->
-    <div class="flex items-center justify-center"><img class="imageToLandmark"
-        src="{{chip}}"
+    <div class="flex items-center justify-center">
+        {% if side == 'R' %}
+        <img class="rightChip" src="{{chip}}"/>
+        {% else %}
+        <img class="imageToLandmark" src="{{chip}}"/>
+        {% endif %}
         {% comment %} usemap="#chip" {% endcomment %}
-    /></div>
+    </div>
     {% comment %} <map name="chip">
         <area shape="rect" coords="{{eye_x}}, {{eye_y}}, {{horn_x}}, {{horn_y}}"></area>
     </map> {% endcomment %}
