@@ -36,3 +36,14 @@ class IbexImage(FilerBaseImage):
         # You must define a meta with en explicit app_label
         app_label = "core"
         default_manager_name = "objects"
+
+
+class IbexChip(FilerBaseImage):
+    ibex_image = models.OneToOneField(
+        IbexImage, on_delete=models.CASCADE, null=True, blank=True
+    )
+
+    class Meta(FilerBaseImage.Meta):
+        # You must define a meta with en explicit app_label
+        app_label = "core"
+        default_manager_name = "objects"
