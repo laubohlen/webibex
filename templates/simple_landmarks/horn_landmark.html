@@ -1,8 +1,5 @@
 {% extends 'base.html' %} {% block layout %}
-<main
-    class="fixedContainer"
-    style="width: {{display_width}}px"
->
+<main class="fixedContainer w-[{{display_width}}]px">
     <h1 class="mt-4 mb-4 flex items-center justify-center">Annotation tasks:&nbsp;<button class="h1HightlightGreen">horn_tip</button>,&nbsp; eye_corner</h1>
     <p class="flex items-center justify-center">Click on the very <span class="underline mx-4">tip of the horn</span> that is facing you</p>
     <a href="{% url 'landmark-eye' oid=image.id %}">
