@@ -5,9 +5,12 @@ dependencies:
     - python
     - django
     - django-allauth
+    - django-environ
     - mysqldb
     - Pillow
     - pip
+    - numpy # to create horn chips
+    - opencv # to create horn chips
      - pip:
        - django-debug-toolbar
        - django-filer
