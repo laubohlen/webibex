@@ -12,6 +12,13 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 import os
 from pathlib import Path
+from environ import Env
+
+# environment setup
+env = Env()
+Env.read_env()
+ENVIRONMENT = env("ENVIRONMENT", default="production")
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,10 +28,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-a1y09x^d9dca*pq(+%2tb=o+z92_(8wjjetn)m2)9(y=7-mib2"
+SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+if ENVIRONMENT == "development":
+    DEBUG = True
+else:
+    DEBUG = False
 
 ALLOWED_HOSTS = []
 
@@ -131,8 +141,9 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
-
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -145,8 +156,11 @@ INTERNAL_IPS = [
 ]
 AUTH_USER_MODEL = "core.User"
 LOGIN_REDIRECT_URL = "/"
+
+# Media files (Uploaded by users)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
 FILER_ENABLE_PERMISSIONS = True
 FILER_IMAGE_MODEL = "core.IbexImage"
 FILER_STORAGES = {
