@@ -11,8 +11,13 @@ dependencies:
     - pip
     - numpy # to create horn chips
     - opencv # to create horn chips
-     - pip:
-       - django-debug-toolbar
-       - django-filer
-       - django-filer\[heif\] # support .heic images
-       
+    - whitenoise # to serve static files in production
+    - pip:
+          - django-debug-toolbar
+          - django-filer
+          - django-filer\[heif\] # support .heic images
+
+
+    # - mpm:
+    #     - tailwindcss
+    #     - clean-css-cli # got some warnings
