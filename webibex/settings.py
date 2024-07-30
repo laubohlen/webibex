@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
+    "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "allauth",
@@ -179,3 +180,10 @@ LANDMARK_IMAGE_WIDTH = 1600  # pixels
 CHIP_FILETYPE = "png"
 CHIP_WIDTH = 144
 CHIP_HEIGHT = 288
+
+SITE_ID = 1
+
+# enabel email required
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+ACCOUNT_AUTHENTICATION_METHOD = "email"
+ACCOUNT_EMAIL_REQUIRED = True
