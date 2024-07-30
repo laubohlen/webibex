@@ -3,8 +3,8 @@
     "version": "1.0.0",
     "main": "index.js",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "tailwind": "tailwind build -i ../static/css/tailwind.css -o ../static/css/style.css"
+        "tailwind": "tailwind build -i ../static/css/tailwind.css -o ../static/css/style.css --watch",
+        "minify": "cleancss ../static/css/style.css -o ../static/css/style.min.css"
     },
     "keywords": [],
     "author": "",
@@ -12,5 +12,8 @@
     "description": "",
     "devDependencies": {
         "tailwindcss": "^3.4.6"
+    },
+    "dependencies": {
+        "clean-css-cli": "^5.6.3"
     }
 }
