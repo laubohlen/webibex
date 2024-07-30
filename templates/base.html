@@ -24,7 +24,7 @@
         />
         <link
             rel="stylesheet"
-            href="{% static 'css/style.css' %}"
+            href="{% if debug %}{% static 'css/style.css' %}{% else %}{% static "css/style.min.css" %}{% endif %}"
         />
     </head>
     <body>
