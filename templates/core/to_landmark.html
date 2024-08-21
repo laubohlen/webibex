@@ -6,6 +6,7 @@
                 <th>file_name</th>
                 <th>side</th>
                 <th>chip</th>
+                <th>action</th>
                 <th>id</th>
             </tr>
         </thead>
@@ -22,7 +23,7 @@
                 <td><a href="{{ i.ibexchip.url }}">ok</a></td>
                 <td>
                     <a
-                        href="{% url 'to-landmark' %}"
+                        href="{% url 'result' oid=i.ibexchip.id %}"
                         class="button"
                         >run</a
                     >
@@ -31,6 +32,7 @@
                 <td>-</td>
                 <td>-</td>
                 {% endif %}
+                <td>-</td>
             </tr>
             {% endfor %}
         </tbody>

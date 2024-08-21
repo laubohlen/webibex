@@ -1,5 +1,6 @@
 import os
 import datetime
+import tensorflow as tf
 
 from django.dispatch import receiver
 from django.db.models.signals import post_save, post_delete
@@ -7,8 +8,9 @@ from django.utils.encoding import force_str
 from django.utils.timezone import now
 from django.utils.text import get_valid_filename as get_valid_filename_django
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
 
-from .models import IbexImage
+from .models import IbexImage, IbexChip, Embedding
 from simple_landmarks.models import LandmarkItem, Landmark
 
 
@@ -62,3 +64,25 @@ def delete_landmark_items(sender, instance, **kwargs):
         content_type=content_type, object_id=image.id
     )
     landmark_items.delete()
+
+
+@receiver(post_save, sender=IbexChip)
+def embed_new_chip(sender, instance, created, **kwargs):
+    ibexchip = instance
+    if created:
+        chip_path = os.path.join(settings.MEDIA_ROOT, ibexchip.file.name)
+        chip_size = (288, 144)
+        chip_encoded = tf.io.read_file(chip_path)
+        chip_decoded = tf.image.decode_jpeg(chip_encoded, channels=3)
+        chip_resized = tf.image.resize(chip_decoded, chip_size)
+        chip = tf.expand_dims(chip_resized, axis=0)
+        model = tf.saved_model.load("core/embedding_model/")
+        embedder = model.signatures["serving_default"]
+
+        output = embedder(chip)["output_tensor"].numpy().tolist()[0]
+        print(output)
+        print(type(output))
+
+        Embedding.objects.create(ibex_chip=ibexchip, embedding=output)
+    else:
+        pass

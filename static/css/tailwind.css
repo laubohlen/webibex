@@ -149,7 +149,7 @@ input[name="remember"] {
     width: auto;
 }
 .button,
-button,
+/* button, */
 [type="submit"],
 [type="button"] {
     font-family: "IBM Plex Mono";

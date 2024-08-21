@@ -44,6 +44,8 @@ urlpatterns = [
         name="finished-landmarks",
     ),
     re_path(r"^chip/(?P<oid>[0-9]+)/$", chip_view, name="chip"),
+    path("results/", results_over_view, name="results-overview"),
+    re_path(r"^result/(?P<oid>[0-9]+)/$", show_result_view, name="result"),
 ]
 
 if settings.DEBUG:

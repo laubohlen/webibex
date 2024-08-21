@@ -1,0 +1,122 @@
+{% extends 'layouts/empty.html' %} {% block content %}
+<form
+    method="POST"
+    action="{% url 'test' %}"
+>
+    {% csrf_token %}
+    <div x-data="{ selectedImage: null }">
+        <div class="flex items-center [&>div>p]:mb-0 justify-center grid-cols-[{{ gallery_chips|length }}] gap-[{{ gallery_chips|length }}]">
+            <div>
+                <h3 class="">Query</h3>
+                <img
+                    src="{{ query_chip.url }}"
+                    class=""
+                />
+                <p>Rank:</p>
+                <p>Distance:</p>
+            </div>
+            {% for chip, distance in gallery_and_distances %}
+            <div
+                @click="selectedImage = (selectedImage === {{ chip.id }} ? null : {{ chip.id }})"
+                :class="{ 'border-blue-600 ring-2 ring-blue-600 bg-blue-100': selectedImage === {{ chip.id }}, 
+                'hover:bg-blue-100': selectedImage !== {{ chip.id }}}"
+                class="border-2 border-transparent cursor-pointer"
+            >
+                <h3 class="">???</h3>
+                <img
+                    src="{{ chip.url }}"
+                    class=""
+                />
+                <p>{{ forloop.counter }}.</p>
+                {% if distance <= threshold %}
+                <p class="text-green-400">{{ distance }}</p>
+                {% else %}
+                <p class="text-red-500">{{ distance }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            <!-- <div
+                @click="selectedImage = (selectedImage === 2 ? null : 2)"
+                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 2,
+                'hover:bg-blue-100': selectedImage !== 2}"
+                class="border-2 border-transparent cursor-pointer"
+            >
+                <h3>???</h3>
+                <img
+                    src="{{ chip.url }}"
+                    class=""
+                />
+                <p>2.</p>
+                <p>3.2</p>
+            </div>
+
+            <div
+                @click="selectedImage = (selectedImage === 3 ? null : 3)"
+                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 3, 
+                'hover:bg-blue-100': selectedImage !== 3}"
+                class="border-2 border-transparent cursor-pointer"
+            >
+                <h3>???</h3>
+                <img
+                    src="{{ chip.url }}"
+                    class=""
+                />
+                <p>3.</p>
+                <p>4.8</p>
+            </div>
+
+            <div
+                @click="selectedImage = (selectedImage === 4 ? null : 4)"
+                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 4,
+                'hover:bg-blue-100': selectedImage !== 4}"
+                class="border-2 border-transparent cursor-pointer"
+            >
+                <h3>???</h3>
+                <img
+                    src="{{ chip.url }}"
+                    class=""
+                />
+                <p>4.</p>
+                <p>4.9</p>
+            </div>
+
+            <div
+                @click="selectedImage = (selectedImage === 5 ? null : 5)"
+                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 5, 
+                'hover:bg-blue-100': selectedImage !== 5}"
+                class="border-2 border-transparent cursor-pointer"
+            >
+                <h3>???</h3>
+                <img
+                    src="{{ chip.url }}"
+                    class=""
+                />
+                <p>5.</p>
+                <p>5.9</p>
+            </div> -->
+            <!-- Hidden input to carry the selected image state -->
+        </div>
+        <input
+            type="hidden"
+            name="selectedImage"
+            :value="selectedImage"
+        />
+        <div class="flex flex-row items-center justify-center gap-8 mt-10 mb-10">
+            <a
+                href=""
+                class="button"
+                >New ID</a
+            >
+            <button
+                type="submit"
+                :disabled="!selectedImage"
+                :class="{ '!opacity-50 !cursor-not-allowed': !selectedImage, 'bg-blue-500 hover:bg-blue-600': selectedImage }"
+                class="button"
+            >
+                Select ID
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock %}

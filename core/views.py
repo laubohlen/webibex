@@ -6,13 +6,13 @@ import numpy as np
 
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from django.db.models.aggregates import Count
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 
-from core.models import IbexImage, IbexChip, Animal
+from core.models import IbexImage, IbexChip, Animal, Embedding
 from simple_landmarks.models import LandmarkItem, Landmark
 
 from pathlib import Path
@@ -68,16 +68,29 @@ def unidentified_images_view(request):
 
 @login_required
 def observed_animal_view(request):
-    # get all animals that are linked to one or more images
-    animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
-        image_count__gt=0
-    )
+    url_name = request.resolver_match.url_name
+
+    if url_name == "observed-animals":
+        # get all animals that are linked to one or more images
+        animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
+            image_count__gt=0
+        )
+    else:  # url_name == unobserved-animals
+        # get all animals that are not featured in any images
+        animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
+            image_count=0
+        )
     # get all images that are not linked to any animal
     nr_unidentified_images = len(IbexImage.objects.filter(animal_id__isnull=True))
+
     return render(
         request,
         "core/animal_table.html",
-        {"animals": animals, "no_id_count": nr_unidentified_images},
+        {
+            "animals": animals,
+            "no_id_count": nr_unidentified_images,
+            "url_name": url_name,
+        },
     )
 
 
@@ -326,18 +339,18 @@ def chip_view(request, oid):
     chip_file = os.path.join(os.path.split(str(image.file.name))[0], chip_name)
     IbexChip.objects.create(file=chip_file, ibex_image_id=image.id)
 
-    eye_x_scaled, eye_y_scaled = scale_coordinate(
-        eye_landmark.x_coordinate,
-        eye_landmark.y_coordinate,
-        settings.LANDMARK_IMAGE_WIDTH,
-        image.width,
-    )
-    horn_x_scaled, horn_y_scaled = scale_coordinate(
-        horn_landmark.x_coordinate,
-        horn_landmark.y_coordinate,
-        settings.LANDMARK_IMAGE_WIDTH,
-        image.width,
-    )
+    # eye_x_scaled, eye_y_scaled = scale_coordinate(
+    #     eye_landmark.x_coordinate,
+    #     eye_landmark.y_coordinate,
+    #     settings.LANDMARK_IMAGE_WIDTH,
+    #     image.width,
+    # )
+    # horn_x_scaled, horn_y_scaled = scale_coordinate(
+    #     horn_landmark.x_coordinate,
+    #     horn_landmark.y_coordinate,
+    #     settings.LANDMARK_IMAGE_WIDTH,
+    #     image.width,
+    # )
 
     return render(
         request,
@@ -346,6 +359,110 @@ def chip_view(request, oid):
     )
 
 
+def all_diffs_np(a, b):
+    """
+    Returns a NumPy array of all combinations of a - b.
+
+    Args:
+        a (2D array): A batch of vectors shaped (B1, F).
+        b (2D array): A batch of vectors shaped (B2, F).
+
+    Returns:
+        The matrix of all pairwise differences between all vectors in `a` and in `b`,
+        will be of shape (B1, B2, F).
+    """
+    return np.expand_dims(a, axis=1) - np.expand_dims(b, axis=0)
+
+
+def cdist_np(a, b, metric="euclidean"):
+    """
+    Similar to scipy.spatial's cdist, but implemented in NumPy.
+
+    Args:
+        a (2D array): The left-hand side, shaped (B1, F).
+        b (2D array): The right-hand side, shaped (B2, F).
+        metric (string): Which distance metric to use.
+
+    Returns:
+        The matrix of all pairwise distances between all vectors in `a` and in `b`,
+        will be of shape (B1, B2).
+    """
+    a = a.astype(np.float32)  # Ensure float32 precision
+    b = b.astype(np.float32)  # Ensure float32 precision
+    diffs = all_diffs_np(a, b)
+
+    if metric == "sqeuclidean":
+        # Squared Euclidean distance
+        return np.sum(np.square(diffs), axis=-1)
+    elif metric == "euclidean":
+        # Euclidean distance
+        return np.sqrt(
+            np.sum(np.square(diffs), axis=-1) + 1e-12
+        )  # Adding a small epsilon for numerical stability
+    elif metric == "cityblock":
+        # Manhattan or L1 distance
+        return np.sum(np.abs(diffs), axis=-1)
+    else:
+        raise NotImplementedError(
+            f"The following metric is not implemented by `cdist` yet: {metric}"
+        )
+
+
+def results_over_view(request):
+    # images that are linked from Embedding model
+    chips = IbexChip.objects.filter(embedding__isnull=False)
+    return render(request, "core/results_overview.html", {"chips": chips})
+
+
+def show_result_view(request, oid):
+    query = IbexChip.objects.filter(id=oid).first()
+    query_embedding = query.embedding.embedding
+    gallery_chips = IbexChip.objects.exclude(id=oid)
+    if gallery_chips:
+        gallery_embeddings = Embedding.objects.filter(ibex_chip_id__in=gallery_chips)
+        # Extract all embedding vectors as a list of lists (or arrays)
+        gallery_vectors = [i.embedding for i in gallery_embeddings]
+        gallery_ids = [i.ibex_chip_id for i in gallery_embeddings]
+
+        # Convert the list of embedding vectors to a NumPy array
+        gallery_vectors_array = np.array(gallery_vectors)
+        distances = cdist_np(
+            np.array([query_embedding]), gallery_vectors_array, metric="euclidean"
+        )
+        distances = distances[0]
+        gallery_and_distances = zip(gallery_chips, distances)
+        # Sort the zipped list based on the distance (second element in each tuple)
+        sorted_gallery = sorted(gallery_and_distances, key=lambda x: x[1])
+        top5_sorted_gallery = sorted_gallery[:5]
+
+    else:
+        theshold_distance = 9.3
+        top5_sorted_gallery = []
+
+    return render(
+        request,
+        "core/result.html",
+        {
+            "query_chip": query,
+            "gallery_and_distances": top5_sorted_gallery,
+            "threshold": theshold_distance,
+        },
+    )
+
+
 def test_view(request):
-    queryset = IbexImage.objects.all()
-    return render(request, "core/test.html", {"queryset": queryset})
+    if request.method == "POST":
+        print("**********")
+        selected_image = request.POST.get("selectedImage")
+        print(selected_image)
+
+        if selected_image:
+            # Process the selected image value here
+            # For example, you could save it to the database or perform some logic
+            return HttpResponse(f"Selected Image: {selected_image}")
+        else:
+            selected_image = None
+            return HttpResponse("No image was selected.")
+
+    # If not a POST request, just render the form
+    return render(request, "test.html", {"selected_image": selected_image})

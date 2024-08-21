@@ -47,3 +47,11 @@ class IbexChip(FilerBaseImage):
         # You must define a meta with en explicit app_label
         app_label = "core"
         default_manager_name = "objects"
+
+
+class Embedding(models.Model):
+    ibex_chip = models.OneToOneField(
+        IbexChip, on_delete=models.CASCADE, null=True, blank=True
+    )
+    embedding = models.JSONField(null=True, blank=True)  # store as array.tolist()
+    time_date = models.DateTimeField(auto_now=True)
