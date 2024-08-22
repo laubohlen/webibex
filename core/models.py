@@ -10,7 +10,7 @@ class User(AbstractUser):
 
 
 class Animal(models.Model):
-    id_code = models.CharField(max_length=8, null=True, blank=True)
+    id_code = models.CharField(max_length=10, null=True, blank=True)
     name = models.CharField(max_length=50, null=True, blank=True)
     marked = models.BooleanField(default=False)
     capture_date = models.DateField(null=True, blank=True)

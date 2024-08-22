@@ -36,65 +36,6 @@
             </div>
             {% endfor %}
 
-            <!-- <div
-                @click="selectedImage = (selectedImage === 2 ? null : 2)"
-                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 2,
-                'hover:bg-blue-100': selectedImage !== 2}"
-                class="border-2 border-transparent cursor-pointer"
-            >
-                <h3>???</h3>
-                <img
-                    src="{{ chip.url }}"
-                    class=""
-                />
-                <p>2.</p>
-                <p>3.2</p>
-            </div>
-
-            <div
-                @click="selectedImage = (selectedImage === 3 ? null : 3)"
-                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 3, 
-                'hover:bg-blue-100': selectedImage !== 3}"
-                class="border-2 border-transparent cursor-pointer"
-            >
-                <h3>???</h3>
-                <img
-                    src="{{ chip.url }}"
-                    class=""
-                />
-                <p>3.</p>
-                <p>4.8</p>
-            </div>
-
-            <div
-                @click="selectedImage = (selectedImage === 4 ? null : 4)"
-                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 4,
-                'hover:bg-blue-100': selectedImage !== 4}"
-                class="border-2 border-transparent cursor-pointer"
-            >
-                <h3>???</h3>
-                <img
-                    src="{{ chip.url }}"
-                    class=""
-                />
-                <p>4.</p>
-                <p>4.9</p>
-            </div>
-
-            <div
-                @click="selectedImage = (selectedImage === 5 ? null : 5)"
-                :class="{ 'border-blue-600 ring-2 ring-blue-600  bg-blue-100': selectedImage === 5, 
-                'hover:bg-blue-100': selectedImage !== 5}"
-                class="border-2 border-transparent cursor-pointer"
-            >
-                <h3>???</h3>
-                <img
-                    src="{{ chip.url }}"
-                    class=""
-                />
-                <p>5.</p>
-                <p>5.9</p>
-            </div> -->
             <!-- Hidden input to carry the selected image state -->
         </div>
         <input
@@ -104,7 +45,7 @@
         />
         <div class="flex flex-row items-center justify-center gap-8 mt-10 mb-10">
             <a
-                href=""
+                href="{% url 'new-ibex' oid=query_chip.id %}"
                 class="button"
                 >New ID</a
             >
@@ -116,6 +57,10 @@
             >
                 Select ID
             </button>
+
+            {% comment %}
+            <p>{{query_chip.id}}</p>
+            {% endcomment %}
         </div>
     </div>
 </form>

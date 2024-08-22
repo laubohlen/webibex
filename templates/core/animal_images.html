@@ -1,7 +1,8 @@
 {% extends 'layouts/empty.html' %} {% block content %}
 <div class="mx-auto mt-4 flex flex-col items-center justify-center md:max-w-6xl">
     <table class="table-auto">
-        <h1>Unidentified Images</h1>
+        <h1>Ibex {{animal_id_code}}</h1>
+        {% if images %}
         <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
             <tr>
                 <th>file_name</th>
@@ -14,6 +15,9 @@
             </tr>
             {% endfor %}
         </tbody>
+        {% else %}
+        <p>No images of this ibex found.</p>
+        {% endif %}
     </table>
 </div>
 {% endblock %}

@@ -28,7 +28,7 @@
             href="{% if debug %}{% static 'css/style.css' %}{% else %}{% static "css/style.min.css" %}{% endif %}"
         />
     </head>
-    <body class="">
+    <body>
         {% include 'includes/header.html' %} {% block layout %} {% endblock %} {% include 'includes/footer.html' %}
     </body>
 </html>

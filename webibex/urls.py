@@ -46,6 +46,8 @@ urlpatterns = [
     re_path(r"^chip/(?P<oid>[0-9]+)/$", chip_view, name="chip"),
     path("results/", results_over_view, name="results-overview"),
     re_path(r"^result/(?P<oid>[0-9]+)/$", show_result_view, name="result"),
+    re_path(r"^animal/(?P<oid>[0-9]+)/$", animal_images_view, name="animal"),
+    re_path(r"^new-ibex/(?P<oid>[0-9]+)/$", created_animal_view, name="new-ibex"),
 ]
 
 if settings.DEBUG:

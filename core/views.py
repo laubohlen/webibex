@@ -1,7 +1,9 @@
 import os
+import re
 import cv2
 import math
 import shutil
+import datetime
 import numpy as np
 
 from django.shortcuts import render, get_object_or_404
@@ -63,6 +65,22 @@ def unidentified_images_view(request):
         request,
         "core/unidentified_images.html",
         {"images": unidentified_images},
+    )
+
+
+@login_required
+def animal_images_view(request, oid):
+    # get all images of a specific animal
+    images = IbexImage.objects.filter(animal_id=oid)
+    # in case images is empty, get the animal name
+    if not images:
+        animal_id_code = Animal.objects.get(pk=oid).id_code
+    else:
+        animal_id_code = images.animal.id_code
+    return render(
+        request,
+        "core/animal_images.html",
+        {"images": images, "animal_id_code": animal_id_code},
     )
 
 
@@ -436,8 +454,10 @@ def show_result_view(request, oid):
         top5_sorted_gallery = sorted_gallery[:5]
 
     else:
-        theshold_distance = 9.3
+
         top5_sorted_gallery = []
+
+    threshold_distance = 9.3
 
     return render(
         request,
@@ -445,8 +465,96 @@ def show_result_view(request, oid):
         {
             "query_chip": query,
             "gallery_and_distances": top5_sorted_gallery,
-            "threshold": theshold_distance,
+            "threshold": threshold_distance,
         },
+    )
+
+
+def generate_animal_id_code(filename: str):
+    # ensure filename is only the basename and not the file path
+    filename = os.path.basename(filename)
+    # get location and year indicators e.g. 'PNGP24'
+    prefix = filename.split("_")[0]
+    # find all newly generated animal codes, earlier codes don't contain "_"
+    new_animals = Animal.objects.filter(id_code__contains="_")
+    if new_animals:
+        # convert to list
+        previous_generated_codes = [i.id_code for i in new_animals]
+        # Regular expression pattern to find a three-digit number
+        pattern = r"\d{3}"
+        code_number_list = [
+            re.findall(pattern, i) for i in previous_generated_codes
+        ]  # returns list of list
+        # convert to actual numbers
+        code_number_list = [int(i[0]) for i in code_number_list]
+        largest_number = max(code_number_list)
+        new_code = f"{prefix}_{largest_number+1:03}"  # -> 'prefix_014'
+    # first new animal
+    else:
+        id_number = 1
+        new_code = f"{prefix}_{id_number:03}"  # -> 'prefix_001'
+
+    return new_code
+
+
+def parse_datetime_from_filename(filename: str):
+    # Ensure filename is only the basename and not the file path
+    filename = os.path.basename(filename)
+
+    # Check if the filename contains the string "noexifdata"
+    if "noexifdata" in filename:
+        return None
+
+    # Regular expression to match the datetime string format: yy_mm_dd_HHMMSS
+    datetime_pattern = r"\d{2}_\d{2}_\d{2}_\d{6}"
+
+    # Search for the pattern in the filename
+    match = re.search(datetime_pattern, filename)
+    if match:
+        datetime_str = match.group()  # Extract the matched datetime string
+        try:
+            # Parse the datetime string into a datetime object
+            datetime_obj = datetime.strptime(datetime_str, "%y_%m_%d_%H%M%S")
+            # Return the date part of the datetime object
+            return datetime_obj.date()
+        except ValueError:
+            # If parsing fails, return None
+            return None
+
+    # If no valid datetime string is found, return None
+    return None
+
+
+@login_required
+def created_animal_view(request, oid):
+    query_chip = IbexChip.objects.filter(id=oid).first()
+    # parse ibeximage filename from query chip object id
+    filename = query_chip.ibex_image.name
+    print(filename)
+    # get new animal id_code
+    new_code = generate_animal_id_code(filename)
+    print(new_code)
+    # check if there is a datetime in the filename from the exif data
+    date_of_image = parse_datetime_from_filename(
+        filename
+    )  # returns datetime.date object
+    print(date_of_image)
+    # create new animal
+    if date_of_image:
+        Animal.objects.create(id_code=new_code, capture_date=date_of_image)
+    else:
+        Animal.objects.create(id_code=new_code)
+    # link image to that animal
+    original_image = IbexImage.objects.get(id=query_chip.ibex_image_id)
+    original_image.animal = Animal.objects.get(id_code=new_code)
+    original_image.save()
+    # get all images of a specific animal
+    images = IbexImage.objects.filter(animal__id_code=new_code)
+
+    return render(
+        request,
+        "core/animal_images.html",
+        {"images": images, "animal_id_code": new_code},
     )
 
 

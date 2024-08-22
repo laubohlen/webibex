@@ -27,7 +27,7 @@
             </tr>
             {% else %} {% for i in animals %}
             <tr>
-                <td><a href="">{{i.id_code}}</a></td>
+                <td><a href="{% url 'animal' oid=i.id %}">{{i.id_code}}</a></td>
                 <td>{{i.name}}</td>
                 <td>{{i.sex}}</td>
                 <td>{{i.cohort}}</td>
