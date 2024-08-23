@@ -66,6 +66,15 @@ def delete_landmark_items(sender, instance, **kwargs):
     landmark_items.delete()
 
 
+@receiver(post_delete, sender=IbexChip)
+def delete_ibexchip_file(sender, instance, **kwargs):
+    # Delete the associated file when the IbexChip instance is deleted
+    if instance.file:
+        instance.file.delete(
+            save=False
+        )  # Delete the file without saving the model again
+
+
 @receiver(post_save, sender=IbexChip)
 def embed_new_chip(sender, instance, created, **kwargs):
     ibexchip = instance

@@ -555,7 +555,7 @@ def parse_datetime_from_filename(filename: str):
         datetime_str = match.group()  # Extract the matched datetime string
         try:
             # Parse the datetime string into a datetime object
-            datetime_obj = datetime.strptime(datetime_str, "%y_%m_%d_%H%M%S")
+            datetime_obj = datetime.datetime.strptime(datetime_str, "%y_%m_%d_%H%M%S")
             # Return the date part of the datetime object
             return datetime_obj.date()
         except ValueError:
