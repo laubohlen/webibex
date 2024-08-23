@@ -1,28 +1,27 @@
 {% extends 'layouts/empty.html' %} {% block content %}
 <form
     method="POST"
-    action="{% url 'test' %}"
+    action="{% url 'saved-animal-selection' %}"
 >
     {% csrf_token %}
-    <div x-data="{ selectedImage: null }">
+    <div x-data="{ selectedAnimalId: null }">
         <div class="flex items-center [&>div>p]:mb-0 justify-center grid-cols-[{{ gallery_chips|length }}] gap-[{{ gallery_chips|length }}]">
-            <div>
+            <!-- show query image on the left side -->
+            <div class="mx-6">
                 <h3 class="">Query</h3>
-                <img
-                    src="{{ query_chip.url }}"
-                    class=""
-                />
+                <img src="{{ query_chip.url }}" />
                 <p>Rank:</p>
                 <p>Distance:</p>
             </div>
+            <!-- show closest matches one by one next to the query -->
             {% for chip, distance in gallery_and_distances %}
             <div
-                @click="selectedImage = (selectedImage === {{ chip.id }} ? null : {{ chip.id }})"
-                :class="{ 'border-blue-600 ring-2 ring-blue-600 bg-blue-100': selectedImage === {{ chip.id }}, 
-                'hover:bg-blue-100': selectedImage !== {{ chip.id }}}"
+                @click="selectedAnimalId = (selectedAnimalId === {{ chip.ibex_image.animal.id }} ? null : {{ chip.ibex_image.animal.id }})"
+                :class="{ 'border-blue-600 ring-2 ring-blue-600 bg-blue-100': selectedAnimalId === {{ chip.ibex_image.animal.id }}, 
+                'hover:bg-blue-100': selectedAnimalId !== {{ chip.ibex_image.animal.id }}}"
                 class="border-2 border-transparent cursor-pointer"
             >
-                <h3 class="">???</h3>
+                <h3 class="">{{ chip.ibex_image.animal.id_code }}</h3>
                 <img
                     src="{{ chip.url }}"
                     class=""
@@ -35,32 +34,55 @@
                 {% endif %}
             </div>
             {% endfor %}
-
-            <!-- Hidden input to carry the selected image state -->
         </div>
+
+        <!-- Dropdown menu for selecting an image -->
+        <div class="flex flex-row items-center justify-center mt-6">
+            <label
+                for="imageDropdown"
+                class="mr-4"
+                >Or choose an existing ID:</label
+            >
+            <select
+                id="imageDropdown"
+                x-model="selectedAnimalId"
+                class="border border-gray-300 rounded-lg p-2"
+            >
+                <option value="">---</option>
+                <!-- Default empty option -->
+                {% for animal in known_animals %}
+                <option value="{{ animal.id }}">{{ animal.id_code }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <!-- Hidden input to carry selected animal -->
         <input
             type="hidden"
-            name="selectedImage"
-            :value="selectedImage"
+            name="selectedAnimalId"
+            :value="selectedAnimalId"
+        />
+        <!-- Hidden input to carry query chip id variable -->
+        <input
+            type="hidden"
+            name="query_chip_id"
+            value="{{ query_chip.id }}"
         />
         <div class="flex flex-row items-center justify-center gap-8 mt-10 mb-10">
+            <!-- create a new ibex, autogenerates a new ID code -->
             <a
                 href="{% url 'new-ibex' oid=query_chip.id %}"
                 class="button"
                 >New ID</a
             >
+            <!-- confirm the selected chip/identity -->
             <button
                 type="submit"
-                :disabled="!selectedImage"
-                :class="{ '!opacity-50 !cursor-not-allowed': !selectedImage, 'bg-blue-500 hover:bg-blue-600': selectedImage }"
+                :disabled="!selectedAnimalId"
+                :class="{ '!opacity-50 !cursor-not-allowed': !selectedAnimalId, 'bg-blue-500 hover:bg-blue-600': selectedAnimalId }"
                 class="button"
             >
                 Select ID
             </button>
-
-            {% comment %}
-            <p>{{query_chip.id}}</p>
-            {% endcomment %}
         </div>
     </div>
 </form>

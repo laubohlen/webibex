@@ -99,6 +99,10 @@ h1 {
     font-size: x-large;
     margin-bottom: 0.5rem;
 }
+h3 {
+    font-family: "IBM Plex Mono";
+}
+
 p {
     font-family: "IBM Plex Mono";
     margin-bottom: 0.5rem;

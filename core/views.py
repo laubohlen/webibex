@@ -10,6 +10,7 @@ from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
 from django.http import HttpResponseRedirect, HttpResponse
 from django.db.models.aggregates import Count
+from django.db.models import Exists, OuterRef
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
@@ -69,6 +70,35 @@ def unidentified_images_view(request):
 
 
 @login_required
+def saved_animal_selection_view(request):
+    # catching forms from selecting animal in show_result_view
+    if request.method == "POST":
+        oid = request.POST.get("selectedAnimalId")
+        query_chip_id = request.POST.get("query_chip_id")
+        # save the animal selection to the chip and image
+        img = IbexImage.objects.get(ibexchip=query_chip_id)
+        img.animal = Animal.objects.get(pk=oid)
+        img.save()
+        print("Saved selected animal to IbexImage.")
+    else:
+        pass
+
+    # get all images of a specific animal
+    images = IbexImage.objects.filter(animal_id=oid)
+    # in case images is empty, get the animal name
+    if not images:
+        animal_id_code = Animal.objects.get(pk=oid).id_code
+    else:
+        animal_id_code = images.first().animal.id_code
+
+    return render(
+        request,
+        "core/animal_images.html",
+        {"images": images, "animal_id_code": animal_id_code},
+    )
+
+
+@login_required
 def animal_images_view(request, oid):
     # get all images of a specific animal
     images = IbexImage.objects.filter(animal_id=oid)
@@ -76,7 +106,7 @@ def animal_images_view(request, oid):
     if not images:
         animal_id_code = Animal.objects.get(pk=oid).id_code
     else:
-        animal_id_code = images.animal.id_code
+        animal_id_code = images.first().animal.id_code
     return render(
         request,
         "core/animal_images.html",
@@ -435,7 +465,17 @@ def results_over_view(request):
 def show_result_view(request, oid):
     query = IbexChip.objects.filter(id=oid).first()
     query_embedding = query.embedding.embedding
-    gallery_chips = IbexChip.objects.exclude(id=oid)
+
+    # query chips of all previously known animals:
+    # Step 1: Filter Animals that have related IbexImages
+    # The distinct() call ensures that each Animal is only returned once, even if they have multiple images.
+    animals_with_images = Animal.objects.filter(ibeximage__isnull=False).distinct()
+
+    # Step 2: Query IbexChips related to those animals via the IbexImage model
+    gallery_chips = IbexChip.objects.filter(ibex_image__animal__in=animals_with_images)
+
+    # gallery_chips = IbexChip.objects.exclude(id=oid)
+    known_animals = Animal.objects.all()
     if gallery_chips:
         gallery_embeddings = Embedding.objects.filter(ibex_chip_id__in=gallery_chips)
         # Extract all embedding vectors as a list of lists (or arrays)
@@ -466,6 +506,7 @@ def show_result_view(request, oid):
             "query_chip": query,
             "gallery_and_distances": top5_sorted_gallery,
             "threshold": threshold_distance,
+            "known_animals": known_animals,
         },
     )
 
@@ -530,15 +571,12 @@ def created_animal_view(request, oid):
     query_chip = IbexChip.objects.filter(id=oid).first()
     # parse ibeximage filename from query chip object id
     filename = query_chip.ibex_image.name
-    print(filename)
     # get new animal id_code
     new_code = generate_animal_id_code(filename)
-    print(new_code)
     # check if there is a datetime in the filename from the exif data
     date_of_image = parse_datetime_from_filename(
         filename
     )  # returns datetime.date object
-    print(date_of_image)
     # create new animal
     if date_of_image:
         Animal.objects.create(id_code=new_code, capture_date=date_of_image)
@@ -567,10 +605,10 @@ def test_view(request):
         if selected_image:
             # Process the selected image value here
             # For example, you could save it to the database or perform some logic
-            return HttpResponse(f"Selected Image: {selected_image}")
+            return HttpResponse(f"Selected Animal: {selected_image}")
         else:
             selected_image = None
-            return HttpResponse("No image was selected.")
+            return HttpResponse("No Animal was selected.")
 
     # If not a POST request, just render the form
     return render(request, "test.html", {"selected_image": selected_image})

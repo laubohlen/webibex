@@ -48,6 +48,11 @@ urlpatterns = [
     re_path(r"^result/(?P<oid>[0-9]+)/$", show_result_view, name="result"),
     re_path(r"^animal/(?P<oid>[0-9]+)/$", animal_images_view, name="animal"),
     re_path(r"^new-ibex/(?P<oid>[0-9]+)/$", created_animal_view, name="new-ibex"),
+    path(
+        "updated-ibex-images/",
+        saved_animal_selection_view,
+        name="saved-animal-selection",
+    ),
 ]
 
 if settings.DEBUG:
