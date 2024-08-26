@@ -3,15 +3,49 @@ import datetime
 import tensorflow as tf
 
 from django.dispatch import receiver
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, post_delete, pre_save
 from django.utils.encoding import force_str
 from django.utils.timezone import now
 from django.utils.text import get_valid_filename as get_valid_filename_django
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.conf import settings
+from allauth.account.signals import user_signed_up
 
-from .models import IbexImage, IbexChip, Embedding
+from .models import IbexImage, IbexChip, Embedding, Animal
 from simple_landmarks.models import LandmarkItem, Landmark
+from filer.models import Folder
+
+User = get_user_model()
+
+
+@receiver(user_signed_up)
+def user_signed_up_callback(request, user, **kwargs):
+    group, created = Group.objects.get_or_create(name="public_users")
+    user.groups.add(group)
+    # TODO: create templates for accessing filer filemanagement outside the admin page
+    # Set the user as staff to access filer folders
+    # risky but my temprary.
+    # user.is_staff = True
+    # user.save()
+
+
+@receiver(post_save, sender=User)
+def create_user_folders(sender, instance, created, **kwargs):
+    if created:
+        # The user has been created
+        user = instance
+        folder_name = f"{user.username}_files"
+
+        # Check if the main folder already exists
+        if not Folder.objects.filter(name=folder_name, owner=user).exists():
+            # Create the main folder
+            main_folder = Folder.objects.create(name=folder_name, owner=user)
+
+            # Create subfolders "_left" and "_right" inside the main folder
+            Folder.objects.create(name="_left", owner=user, parent=main_folder)
+            Folder.objects.create(name="_right", owner=user, parent=main_folder)
 
 
 @receiver(post_save, sender=IbexImage)
@@ -95,3 +129,44 @@ def embed_new_chip(sender, instance, created, **kwargs):
         Embedding.objects.create(ibex_chip=ibexchip, embedding=output)
     else:
         pass
+
+
+@receiver(pre_save, sender=IbexImage)
+def check_animal_id_change(sender, instance, **kwargs):
+    # If the instance exists, get the current animal_id from the database
+    if instance.pk:
+        original_instance = IbexImage.objects.get(pk=instance.pk)
+        print("*original_instance", original_instance)
+        instance._original_animal_id = original_instance.animal_id
+    else:
+        # New instance, no previous animal_id
+        instance._original_animal_id = None
+
+
+@receiver(post_save, sender=IbexImage)
+def create_folder_for_animal_on_change(sender, instance, **kwargs):
+    # Compare the original animal_id with the current one
+    if instance.animal_id != instance._original_animal_id:
+        print("**new_instance", instance.animal_id)
+        if instance.animal:
+            print("***animal_id", instance.animal)
+            # Get animal ID and user
+            animal_id = instance.animal.id_code
+            user = User.objects.get(pk=instance.owner_id)
+            username = user.username
+            user_main_folder_name = f"{username}_files"
+            user_main_foler = Folder.objects.filter(
+                name=user_main_folder_name, owner=user
+            ).first()
+
+            # Check if a folder with the animal ID exists for the user
+            if not Folder.objects.filter(name=animal_id, owner=user).exists():
+                print("****folder doesnt exist", instance.animal)
+                # Create the folder if it does not exist
+                animal_folder = Folder.objects.create(
+                    name=animal_id, owner=user, parent=user_main_foler
+                )
+
+                # Create subfolders "_left" and "_right" inside the main folder
+                Folder.objects.create(name="left", owner=user, parent=animal_folder)
+                Folder.objects.create(name="right", owner=user, parent=animal_folder)
