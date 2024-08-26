@@ -36,7 +36,7 @@ def create_user_folders(sender, instance, created, **kwargs):
     if created:
         # The user has been created
         user = instance
-        folder_name = f"_{user.username}_files"
+        folder_name = f"{user.username}_files"
 
         # Check if the main folder already exists
         if not Folder.objects.filter(name=folder_name, owner=user).exists():
@@ -154,7 +154,7 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
             animal_id = instance.animal.id_code
             user = User.objects.get(pk=instance.owner_id)
             username = user.username
-            user_main_folder_name = f"_{username}_files"
+            user_main_folder_name = f"{username}_files"
             user_main_foler = Folder.objects.filter(
                 name=user_main_folder_name, owner=user
             ).first()

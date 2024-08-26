@@ -14,7 +14,7 @@ class RedirectToUserFolderMiddleware:
             if request.path == reverse("admin:filer_folder_changelist"):
                 # Redirect to the user's specific folder
                 user = request.user
-                main_folder_name = f"_{user.username}_files"
+                main_folder_name = f"{user.username}_files"
                 try:
                     main_user_folder = get_object_or_404(
                         Folder, name=main_folder_name, owner=user
