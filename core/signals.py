@@ -46,6 +46,7 @@ def create_user_folders(sender, instance, created, **kwargs):
             # Create subfolders "_left" and "_right" inside the main folder
             Folder.objects.create(name="_left", owner=user, parent=main_folder)
             Folder.objects.create(name="_right", owner=user, parent=main_folder)
+            Folder.objects.create(name="_other", owner=user, parent=main_folder)
 
 
 @receiver(post_save, sender=IbexImage)
@@ -147,9 +148,7 @@ def check_animal_id_change(sender, instance, **kwargs):
 def create_folder_for_animal_on_change(sender, instance, **kwargs):
     # Compare the original animal_id with the current one
     if instance.animal_id != instance._original_animal_id:
-        print("**new_instance", instance.animal_id)
         if instance.animal:
-            print("***animal_id", instance.animal)
             # Get animal ID and user
             animal_id = instance.animal.id_code
             user = User.objects.get(pk=instance.owner_id)
@@ -168,5 +167,37 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
                 )
 
                 # Create subfolders "left" and "right" inside the new animal folder
-                Folder.objects.create(name="left", owner=user, parent=animal_folder)
-                Folder.objects.create(name="right", owner=user, parent=animal_folder)
+                left_folder, _ = Folder.objects.get_or_create(
+                    name=f"left_{animal_id}", owner=user, parent=animal_folder
+                )
+                right_folder, _ = Folder.objects.get_or_create(
+                    name=f"right_{animal_id}", owner=user, parent=animal_folder
+                )
+                other_folder, _ = Folder.objects.get_or_create(
+                    name=f"other_{animal_id}", owner=user, parent=animal_folder
+                )
+
+                # Determine which subfolder the image should go to
+                if instance.side == "L":
+                    target_folder = left_folder
+                elif instance.side == "R":
+                    target_folder = right_folder
+                elif instance.side == "O":
+                    target_folder = other_folder
+                else:
+                    pass
+
+                # Move the image to the correct folder
+                instance.folder = target_folder
+
+                # create new filename
+                old_filename = instance.name
+                parts = old_filename.split("_")
+                if len(parts) >= 3: # old_name = "PNGP_---_yy_mm_dd_HHMMSS.ext" or "PNGP_---_noexif.ext"
+                    new_filename = f"{animal_id}_{"_".join(parts[2:])}"
+                else: # old_name = "V01O_noexif.ext"
+                    new_filename = f"{animal_id}_{parts[1]}"
+
+                # rename and finally save all changes
+                instance.name = new_filename
+                instance.save()
