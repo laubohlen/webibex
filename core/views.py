@@ -492,9 +492,12 @@ def show_result_view(request, oid):
         # Sort the zipped list based on the distance (second element in each tuple)
         sorted_gallery = sorted(gallery_and_distances, key=lambda x: x[1])
         top5_sorted_gallery = sorted_gallery[:5]
+        # round distances
+        top5_sorted_gallery = [
+            (chip, round(distance, 2)) for chip, distance in top5_sorted_gallery
+        ]
 
     else:
-
         top5_sorted_gallery = []
 
     threshold_distance = 9.3
