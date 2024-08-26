@@ -44,9 +44,9 @@ def create_user_folders(sender, instance, created, **kwargs):
             main_folder = Folder.objects.create(name=folder_name, owner=user)
 
             # Create subfolders "_left" and "_right" inside the main folder
-            Folder.objects.create(name="_left", owner=user, parent=main_folder)
-            Folder.objects.create(name="_right", owner=user, parent=main_folder)
-            Folder.objects.create(name="_other", owner=user, parent=main_folder)
+            Folder.objects.create(name="_left_upload", owner=user, parent=main_folder)
+            Folder.objects.create(name="_right_upload", owner=user, parent=main_folder)
+            Folder.objects.create(name="_other_upload", owner=user, parent=main_folder)
 
 
 @receiver(post_save, sender=IbexImage)
@@ -71,7 +71,17 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
             location_id, season, unmarked_code, created, file_extenstion
         )
         image.name = get_valid_filename_django(new_filename)
+
+        # tag left or right side if parent folder indicates this
+        if image.folder.name == "_left_upload":
+            image.side = "L"
+        elif image.folder.name == "_right_upload":
+            image.side = "R"
+        elif image.folder.name == "_other_upload":
+            image.side = "O"
+        
         image.save()
+    
     else:
         pass
 
