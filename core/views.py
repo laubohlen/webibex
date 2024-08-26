@@ -17,6 +17,7 @@ from django.conf import settings
 
 from core.models import IbexImage, IbexChip, Animal, Embedding
 from simple_landmarks.models import LandmarkItem, Landmark
+from filer.models import Folder
 
 from pathlib import Path
 from PIL import Image
@@ -53,8 +54,15 @@ def welcome_view(request):
 
 
 def upload_view(request):
-    # link to django-filer admin page
-    url = reverse("admin:filer_folder_changelist")
+    # link to django-filer main folder of the user
+    # not the root folder of the user because the folder hierarchy isn't displayed correctly
+    user = request.user
+    main_folder_name = f"_{user.username}_files"
+    main_user_folder = get_object_or_404(Folder, name=main_folder_name, owner=user)
+    # Construct the URL to the folder's listing page in the admin
+    url = reverse(
+        "admin:filer-directory_listing", kwargs={"folder_id": main_user_folder.id}
+    )
     return HttpResponseRedirect(url)
 
 
