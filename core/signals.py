@@ -167,6 +167,6 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
                     name=animal_id, owner=user, parent=user_main_foler
                 )
 
-                # Create subfolders "_left" and "_right" inside the main folder
+                # Create subfolders "left" and "right" inside the new animal folder
                 Folder.objects.create(name="left", owner=user, parent=animal_folder)
                 Folder.objects.create(name="right", owner=user, parent=animal_folder)
