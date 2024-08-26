@@ -6,7 +6,7 @@ import shutil
 import datetime
 import numpy as np
 
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.http import HttpResponseRedirect, HttpResponse
 from django.db.models.aggregates import Count
@@ -54,8 +54,8 @@ def welcome_view(request):
 
 
 def upload_view(request):
-    # link to django-filer main folder of the user
-    # not the root folder of the user because the folder hierarchy isn't displayed correctly
+    # link to django-filer main folder of the user istead of
+    # the root folder of the user because the folder hierarchy isn't displayed correctly
     user = request.user
     main_folder_name = f"_{user.username}_files"
     main_user_folder = get_object_or_404(Folder, name=main_folder_name, owner=user)
