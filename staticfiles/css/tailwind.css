@@ -97,7 +97,12 @@ h1 {
     font-family: "IBM Plex Mono";
     font-weight: bold;
     font-size: x-large;
+    margin-bottom: 0.5rem;
 }
+h3 {
+    font-family: "IBM Plex Mono";
+}
+
 p {
     font-family: "IBM Plex Mono";
     margin-bottom: 0.5rem;
@@ -149,7 +154,7 @@ input[name="remember"] {
     width: auto;
 }
 .button,
-button,
+/* button, */
 [type="submit"],
 [type="button"] {
     font-family: "IBM Plex Mono";
