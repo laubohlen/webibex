@@ -47,8 +47,8 @@ def saved_animal_selection_view(request):
         oid = request.POST.get("selectedAnimalId")
         query_chip_id = request.POST.get("query_chip_id")
         # save the animal selection to the chip and image
-        img = IbexImage.objects.get(ibexchip=query_chip_id)
-        img.animal = Animal.objects.get(pk=oid)
+        img = get_object_or_404(IbexImage, ibexchip=query_chip_id)
+        img.animal = get_object_or_404(Animal, pk=oid)
         img.save()
         print("Saved selected animal to IbexImage.")
     else:
@@ -58,7 +58,7 @@ def saved_animal_selection_view(request):
     images = IbexImage.objects.filter(animal_id=oid)
     # in case images is empty, get the animal name
     if not images:
-        animal_id_code = Animal.objects.get(pk=oid).id_code
+        animal_id_code = get_object_or_404(Animal, pk=oid).id_code
     else:
         animal_id_code = images.first().animal.id_code
 
@@ -75,7 +75,7 @@ def animal_images_view(request, oid):
     images = IbexImage.objects.filter(animal_id=oid)
     # in case images is empty, get the animal name
     if not images:
-        animal_id_code = Animal.objects.get(pk=oid).id_code
+        animal_id_code = get_object_or_404(Animal, pk=oid).id_code
     else:
         animal_id_code = images.first().animal.id_code
     return render(
@@ -139,7 +139,7 @@ def to_landmark_images_view(request):
 
 @login_required
 def landmark_horn_view(request, oid):
-    image = IbexImage.objects.filter(id=oid).first()
+    image = get_object_or_404(IbexImage, id=oid)
     return render(
         request,
         "simple_landmarks/horn_landmark.html",
@@ -149,14 +149,14 @@ def landmark_horn_view(request, oid):
 
 @login_required
 def landmark_eye_view(request, oid):
-    image = IbexImage.objects.filter(id=oid).first()
+    image = get_object_or_404(IbexImage, id=oid)
 
     x_horn_scaled, y_horn_scaled = utils.parse_coordinates(request)
     x_horn, y_horn = utils.scale_coordinate(
         x_horn_scaled, y_horn_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
     )
     # save horn-landmark for that image
-    landmark_id = Landmark.objects.get(label="horn_tip").id
+    landmark_id = get_object_or_404(Landmark, label="horn_tip").id
     content_type = ContentType.objects.get_for_model(IbexImage)
     horn_landmark = get_object_or_404(
         LandmarkItem,
@@ -183,13 +183,13 @@ def landmark_eye_view(request, oid):
 
 @login_required
 def finished_landmark_view(request, oid):
-    image = IbexImage.objects.filter(id=oid).first()
+    image = get_object_or_404(IbexImage, id=oid)
     x_eye_scaled, y_eye_scaled = utils.parse_coordinates(request)
     x_eye, y_eye = utils.scale_coordinate(
         x_eye_scaled, y_eye_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
     )
     # save eye-landmark for that image
-    eye_landmark_id = Landmark.objects.get(label="eye_corner").id
+    eye_landmark_id = get_object_or_404(Landmark, label="eye_corner").id
     content_type = ContentType.objects.get_for_model(IbexImage)
     eye_landmark = get_object_or_404(
         LandmarkItem,
@@ -202,7 +202,7 @@ def finished_landmark_view(request, oid):
     eye_landmark.save()
 
     # render landmarks on image
-    horn_landmark_id = Landmark.objects.get(label="horn_tip").id
+    horn_landmark_id = get_object_or_404(Landmark, label="horn_tip").id
     horn_landmark = get_object_or_404(
         LandmarkItem,
         content_type=content_type,
@@ -235,7 +235,7 @@ def finished_landmark_view(request, oid):
 
 @login_required
 def chip_view(request, oid):
-    image = IbexImage.objects.filter(id=oid).first()
+    image = get_object_or_404(IbexImage, id=oid)
     image_path = os.path.join(settings.MEDIA_ROOT, image.file.name)
     chip_name = utils.get_chip_filename(image.file.name, settings.CHIP_FILETYPE)
     chip_url = os.path.join(os.path.split(image.url)[0], chip_name)
@@ -245,7 +245,7 @@ def chip_view(request, oid):
     if chip_path.is_file():
         chip_path.unlink()
         # also update database
-        ibex_chip = IbexChip.objects.filter(ibex_image_id=image.id)
+        ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
         ibex_chip.delete()
 
     # create new chip from original image and try to preserve all metadata
@@ -256,14 +256,14 @@ def chip_view(request, oid):
 
     # load landmarks
     content_type = ContentType.objects.get_for_model(IbexImage)
-    horn_landmark_id = Landmark.objects.get(label="horn_tip").id
+    horn_landmark_id = get_object_or_404(Landmark, label="horn_tip").id
     horn_landmark = get_object_or_404(
         LandmarkItem,
         content_type=content_type,
         object_id=oid,
         landmark_id=horn_landmark_id,
     )
-    eye_landmark_id = Landmark.objects.get(label="eye_corner").id
+    eye_landmark_id = get_object_or_404(Landmark, label="eye_corner").id
     eye_landmark = get_object_or_404(
         LandmarkItem,
         content_type=content_type,
@@ -331,7 +331,7 @@ def results_over_view(request):
 
 
 def show_result_view(request, oid):
-    query = IbexChip.objects.filter(id=oid).first()
+    query = get_object_or_404(IbexChip, id=oid)
     query_embedding = query.embedding.embedding
 
     # query chips of all previously known animals:
@@ -384,7 +384,8 @@ def show_result_view(request, oid):
 
 @login_required
 def created_animal_view(request, oid):
-    query_chip = IbexChip.objects.filter(id=oid).first()
+    query_chip = get_object_or_404(IbexChip, id=oid)
+
     # parse ibeximage filename from query chip object id
     filename = query_chip.ibex_image.name
     # get new animal id_code
@@ -399,8 +400,8 @@ def created_animal_view(request, oid):
     else:
         Animal.objects.create(id_code=new_code)
     # link image to that animal
-    original_image = IbexImage.objects.get(id=query_chip.ibex_image_id)
-    original_image.animal = Animal.objects.get(id_code=new_code)
+    original_image = get_object_or_404(IbexImage, id=query_chip.ibex_image_id)
+    original_image.animal = get_object_or_404(Animal, id_code=new_code)
     original_image.save()
     # get all images of a specific animal
     images = IbexImage.objects.filter(animal__id_code=new_code)
