@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 import os
+import dj_database_url
 from pathlib import Path
 from environ import Env
 
@@ -109,6 +110,10 @@ DATABASES = {
         "PASSWORD": os.getenv("MYSQL_ROOT_PASSWORD"),
     }
 }
+
+POSTGRES_LOCALLY = True
+if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
+    DATABASES["default"] = dj_database_url.parse(env("DATABASE_URL"))
 
 
 # Password validation
