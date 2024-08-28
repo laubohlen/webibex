@@ -135,8 +135,6 @@ def embed_new_chip(sender, instance, created, **kwargs):
         embedder = model.signatures["serving_default"]
 
         output = embedder(chip)["output_tensor"].numpy().tolist()[0]
-        print(output)
-        print(type(output))
 
         Embedding.objects.create(ibex_chip=ibexchip, embedding=output)
     else:
@@ -148,7 +146,6 @@ def check_animal_id_change(sender, instance, **kwargs):
     # If the instance exists, get the current animal_id from the database
     if instance.pk:
         original_instance = IbexImage.objects.get(pk=instance.pk)
-        print("*original_instance", original_instance)
         instance._original_animal_id = original_instance.animal_id
     else:
         # New instance, no previous animal_id
@@ -173,10 +170,6 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
             left_folder, _ = Folder.objects.get_or_create(name=f"left_{animal_id}", owner=user, parent=animal_folder)
             right_folder, _ = Folder.objects.get_or_create(name=f"right_{animal_id}", owner=user, parent=animal_folder)
             other_folder, _ = Folder.objects.get_or_create(name=f"other_{animal_id}", owner=user, parent=animal_folder)
-            print(animal_folder)
-            print(left_folder)
-            print(right_folder)
-            print(other_folder)
 
 
             # Determine which subfolder the image should go to
