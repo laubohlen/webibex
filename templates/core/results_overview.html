@@ -4,13 +4,23 @@
         <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
             <tr>
                 <th>file_name</th>
+                <th>side</th>
+                <th>chip</th>
+                <th>id</th>
             </tr>
         </thead>
         <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
-            {% for i in chips %}
+            {% for i in images %}
             <tr>
-                <td><a href="{{i.canonical_url}}">{{i.ibex_image}}</a></td>
-                <!-- <td>{{i.embedding.embedding}}</td> -->
+                <td><a href="{% url 'run-again' oid=i.ibexchip.id %}">{{i.name}}</a></td>
+                <td>{{i.side}}</td>
+                {% if i.ibexchip.ibex_image_id %}
+                <td><a href="{{ i.ibexchip.url }}">ok</a></td>
+                {% else %}
+                <td>-</td>
+                <td>-</td>
+                {% endif %}
+                <td>{{ i.animal.id_code }}</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -8,7 +8,11 @@
         <div class="flex items-center [&>div>p]:mb-0 justify-center grid-cols-[{{ gallery_chips|length }}] gap-[{{ gallery_chips|length }}]">
             <!-- show query image on the left side -->
             <div class="mx-6">
+                {% if query_chip.ibex_image.animal %}
+                <h3 class="">{{query_chip.ibex_image.animal.id_code}} ({{query_chip.ibex_image.side}})</h3>
+                {% else %}
                 <h3 class="">Query ({{query_chip.ibex_image.side}})</h3>
+                {% endif %}
                 <img src="{{ query_chip.url }}" />
                 <p>Rank:</p>
                 <p>Distance:</p>
