@@ -11,6 +11,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 from allauth.account.signals import user_signed_up
 
 from .models import IbexImage, IbexChip, Embedding, Animal
@@ -168,46 +169,37 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
                 name=user_main_folder_name, owner=user
             ).first()
 
-            # Check if a folder with the animal ID exists for the user
-            if not Folder.objects.filter(name=animal_id, owner=user).exists():
-                print("****folder doesnt exist", instance.animal)
-                # Create the folder if it does not exist
-                animal_folder = Folder.objects.create(
-                    name=animal_id, owner=user, parent=user_main_foler
-                )
+            animal_folder, _ = Folder.objects.get_or_create(name=animal_id, owner=user, parent=user_main_foler)
+            left_folder, _ = Folder.objects.get_or_create(name=f"left_{animal_id}", owner=user, parent=animal_folder)
+            right_folder, _ = Folder.objects.get_or_create(name=f"right_{animal_id}", owner=user, parent=animal_folder)
+            other_folder, _ = Folder.objects.get_or_create(name=f"other_{animal_id}", owner=user, parent=animal_folder)
+            print(animal_folder)
+            print(left_folder)
+            print(right_folder)
+            print(other_folder)
 
-                # Create subfolders "left" and "right" inside the new animal folder
-                left_folder, _ = Folder.objects.get_or_create(
-                    name=f"left_{animal_id}", owner=user, parent=animal_folder
-                )
-                right_folder, _ = Folder.objects.get_or_create(
-                    name=f"right_{animal_id}", owner=user, parent=animal_folder
-                )
-                other_folder, _ = Folder.objects.get_or_create(
-                    name=f"other_{animal_id}", owner=user, parent=animal_folder
-                )
 
-                # Determine which subfolder the image should go to
-                if instance.side == "L":
-                    target_folder = left_folder
-                elif instance.side == "R":
-                    target_folder = right_folder
-                elif instance.side == "O":
-                    target_folder = other_folder
-                else:
-                    pass
+            # Determine which subfolder the image should go to
+            if instance.side == "L":
+                target_folder = left_folder
+            elif instance.side == "R":
+                target_folder = right_folder
+            elif instance.side == "O":
+                target_folder = other_folder
+            else:
+                pass
 
-                # Move the image to the correct folder
-                instance.folder = target_folder
+            # Move the image to the correct folder
+            instance.folder = target_folder
 
-                # create new filename
-                old_filename = instance.name
-                parts = old_filename.split("_")
-                if len(parts) >= 3: # old_name = "PNGP_---_yy_mm_dd_HHMMSS.ext" or "PNGP_---_noexif.ext"
-                    new_filename = f"{animal_id}_{"_".join(parts[2:])}"
-                else: # old_name = "V01O_noexif.ext"
-                    new_filename = f"{animal_id}_{parts[1]}"
+            # create new filename
+            old_filename = instance.name
+            parts = old_filename.split("_")
+            if len(parts) >= 3: # old_name = "PNGP_---_yy_mm_dd_HHMMSS.ext" or "PNGP_---_noexif.ext"
+                new_filename = f"{animal_id}_{"_".join(parts[2:])}"
+            else: # old_name = "V01O_noexif.ext"
+                new_filename = f"{animal_id}_{parts[1]}"
 
-                # rename and finally save all changes
-                instance.name = new_filename
-                instance.save()
+            # rename and finally save all changes
+            instance.name = new_filename
+            instance.save()
