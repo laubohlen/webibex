@@ -56,6 +56,8 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "cloudinary_storage",
+    "cloudinary",
     "allauth",
     "allauth.account",
     "filer",
@@ -165,7 +167,17 @@ LOGIN_REDIRECT_URL = "/"
 
 # Media files (Uploaded by users)
 MEDIA_URL = "/media/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+else:
+    MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": env("CLOUD_NAME"),
+    "API_KEY": env("CLOUD_API_KEY"),
+    "API_SECRET": env("CLOUD_API_SECRET"),
+}
 
 FILER_ENABLE_PERMISSIONS = True
 FILER_IMAGE_MODEL = "core.IbexImage"
