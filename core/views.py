@@ -1,7 +1,13 @@
 import os
 import cv2
+import time
 import shutil
+import requests
 import numpy as np
+
+import cloudinary.uploader
+import cloudinary.api
+import cloudinary.utils
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -10,12 +16,14 @@ from django.db.models.aggregates import Count
 from django.http import HttpResponseRedirect, HttpResponse
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 
 from pathlib import Path
-
+from io import BytesIO
+from PIL import Image
 from core.models import IbexImage, IbexChip, Animal, Embedding
 from simple_landmarks.models import LandmarkItem, Landmark
-
 from . import utils
 
 
@@ -236,23 +244,82 @@ def finished_landmark_view(request, oid):
 @login_required
 def chip_view(request, oid):
     image = get_object_or_404(IbexImage, id=oid)
-    image_path = os.path.join(settings.MEDIA_ROOT, image.file.name)
+    print("image -", image)
     chip_name = utils.get_chip_filename(image.file.name, settings.CHIP_FILETYPE)
-    chip_url = os.path.join(os.path.split(image.url)[0], chip_name)
-    chip_path = Path(os.path.join(os.path.split(image_path)[0], chip_name))
+    print("chip name -", chip_name)
 
-    # if a chip exists already, delete it before continuing
-    if chip_path.is_file():
-        chip_path.unlink()
-        # also update database
-        ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
-        ibex_chip.delete()
+    # Determine media storage environment
+    if settings.ENVIRONMENT == "production" or settings.POSTGRES_LOCALLY == True:
+        is_local = False
+    else:
+        is_local = True
+    print("is_local -", is_local)
 
-    # create new chip from original image and try to preserve all metadata
-    shutil.copy2(image_path, chip_path)
+    if is_local:
+        image_path = os.path.join(settings.MEDIA_ROOT, image.file.name)
+        chip_url = os.path.join(os.path.split(image.url)[0], chip_name)
+        chip_path = Path(os.path.join(os.path.split(image_path)[0], chip_name))
 
-    # load image
-    img = utils.load_image(chip_path)
+        # if a chip exists already, delete it before continuing
+        if chip_path.is_file():
+            chip_path.unlink()
+            # also update database
+            ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
+            ibex_chip.delete()
+            print(
+                "IbexChip already existed on local storage, deleted successfully before continueing."
+            )
+
+        # create new chip from original image and try to preserve all metadata
+        shutil.copy2(image_path, chip_path)
+
+        # load image
+        img = utils.load_image(chip_path)
+
+    else:
+        # if a chip exists already, delete it before continuing
+        try:
+            ibex_chip = IbexChip.objects.get(ibex_image_id=image.id)
+            # If the object is found, continue with your logic here
+            print(f"IbexChip found in database with ibex_image_id: {image.id}")
+            print("Deleting previous ibex chip media file on Cloudinary..")
+            chip_public_id = ibex_chip.file.name
+            try:
+                delete_response = cloudinary.api.delete_resources([chip_public_id])
+                if (
+                    delete_response.get("deleted", {}).get(chip_public_id)
+                    == "not_found"
+                ):
+                    print("Resource not found on Cloudinary.")
+                else:
+                    ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
+                    print("IbexChip found in the database, deleting...")
+                    ibex_chip.delete()
+                    print(
+                        "IbexChip already existed on Cloudinary, deleted successfully before continueing."
+                    )
+            except:
+                print(f"An error occurred with Cloudinary.")
+                pass
+        except IbexChip.DoesNotExist:
+            # Handle the case where the object does not exist
+            print("IbexChip does not exist already, continueing normally..")
+            pass
+
+        # Download the image from Cloudinary
+        img_url = cloudinary.utils.cloudinary_url(image.file.name)[0]
+        response = requests.get(img_url)
+
+        # Convert the response content to a NumPy array
+        img_array = np.frombuffer(response.content, np.uint8)
+
+        # Decode the image from the NumPy array
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+        if img is None:
+            raise ValueError("Failed to load image from Cloudinary")
+
+        print("Downloaded image from cloudinary.")
 
     # load landmarks
     content_type = ContentType.objects.get_for_model(IbexImage)
@@ -298,11 +365,26 @@ def chip_view(request, oid):
     img_transformed = cv2.warpAffine(img, tform, shape_dst)
 
     # save
-    cv2.imwrite(chip_path, cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
+    if is_local:
+        cv2.imwrite(chip_path, cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
+        chip_file = os.path.join(os.path.split(str(image.file.name))[0], chip_name)
+        IbexChip.objects.create(file=chip_file, ibex_image_id=image.id)
+        print("Chip saved locally using open-cv, database updated.")
+    else:
+        # Convert the image to the correct format for Cloudinary
+        buffer = BytesIO()
+        img_pil = Image.fromarray(cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
+        img_pil.save(buffer, format="png")
+        buffer.seek(0)
 
-    # update database
-    chip_file = os.path.join(os.path.split(str(image.file.name))[0], chip_name)
-    IbexChip.objects.create(file=chip_file, ibex_image_id=image.id)
+        # Use Django's FileField to handle the upload
+        chip_content = ContentFile(buffer.getvalue())
+
+        # Create the IbexChip instance
+        ibex_chip = IbexChip(ibex_image_id=image.id)
+        ibex_chip.file.save(chip_name, chip_content)
+        print("Chip saved on Cloudinary using Django's FileField.")
+        chip_url = ibex_chip.file.url
 
     # eye_x_scaled, eye_y_scaled = scale_coordinate(
     #     eye_landmark.x_coordinate,
