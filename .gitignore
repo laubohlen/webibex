@@ -1,7 +1,7 @@
 webibex.code-workspace
 node/
 static/
-core/embedding_model/
+# core/embedding_model/
 prod/
 
 # media
