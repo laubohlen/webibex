@@ -1,9 +1,8 @@
 {% extends 'base.html' %} {% block layout %}
 <main
     class="fixedContainer"
-    style="width: {{display_width}}px"
+    style="width: {{display_width}}px;"
 >
-    <!-- ismap makes image clickable, sends pixel coordinates to server -->
     <div class="flex items-center justify-center">
         {% if side == 'R' %}
         <img class="rightChip" src="{{chip}}"/>
