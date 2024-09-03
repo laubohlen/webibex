@@ -3,6 +3,7 @@ node/
 static/
 # core/embedding_model/
 prod/
+gcp_service_account_credentials.json
 
 # media
 media/
