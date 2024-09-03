@@ -367,9 +367,13 @@ def chip_view(request, oid):
     # save
     if is_local:
         cv2.imwrite(chip_path, cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
+        print("path", chip_path)
         chip_file = os.path.join(os.path.split(str(image.file.name))[0], chip_name)
+        print("file", chip_file)
         IbexChip.objects.create(file=chip_file, ibex_image_id=image.id)
         print("Chip saved locally using open-cv, database updated.")
+        ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
+        print("Loaded ibex chip object")
     else:
         # Convert the image to the correct format for Cloudinary
         buffer = BytesIO()
@@ -385,6 +389,9 @@ def chip_view(request, oid):
         ibex_chip.file.save(chip_name, chip_content)
         print("Chip saved on Cloudinary using Django's FileField.")
         chip_url = ibex_chip.file.url
+
+    # Call the custom method to process and embed the chip
+    utils.embed_new_chip(ibex_chip)
 
     # eye_x_scaled, eye_y_scaled = scale_coordinate(
     #     eye_landmark.x_coordinate,

@@ -15,6 +15,9 @@ import dj_database_url
 from pathlib import Path
 from environ import Env
 
+import google.auth
+from google.oauth2 import service_account
+
 # environment setup
 env = Env()
 Env.read_env()
@@ -113,9 +116,24 @@ DATABASES = {
     }
 }
 
-POSTGRES_LOCALLY = True
+POSTGRES_LOCALLY = False
 if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
     DATABASES["default"] = dj_database_url.parse(env("DATABASE_URL"))
+
+GCP_MODEL_LOCALLY = True
+# Set up Google Cloud credentials based on the environment
+if ENVIRONMENT == "production" or GCP_MODEL_LOCALLY == False:
+    # For production, use the environment variable or other setup
+    credentials, project = google.auth.default()
+
+else:
+    # Path to your service account JSON file for development
+    GOOGLE_APPLICATION_CREDENTIALS_DEV = env("GOOGLE_APPLICATION_CREDENTIALS_DEV")
+
+    # Load the credentials manually
+    credentials = service_account.Credentials.from_service_account_file(
+        GOOGLE_APPLICATION_CREDENTIALS_DEV
+    )
 
 
 # Password validation

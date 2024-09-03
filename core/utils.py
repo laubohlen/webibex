@@ -2,10 +2,34 @@ import os
 import re
 import cv2
 import math
+import json
+import base64
+import requests
 import datetime
+import tensorflow as tf
 import numpy as np
 
-from core.models import Animal
+import cloudinary.utils
+
+from typing import Dict, List, Union
+
+from google.cloud import aiplatform
+from google.protobuf import json_format
+from google.protobuf.struct_pb2 import Value
+from google.auth import default
+from google.oauth2 import service_account
+from django.conf import settings
+
+from core.models import Animal, Embedding
+
+
+from environ import Env
+
+# Initialize environment variables
+env = Env()
+Env.read_env()
+
+ENVIRONMENT = env("ENVIRONMENT", default="production")
 
 
 # snipet from https://github.com/krasch/simple_landmarks
@@ -192,3 +216,142 @@ def parse_datetime_from_filename(filename: str):
 
     # If no valid datetime string is found, return None
     return None
+
+
+def predict_custom_trained_model(
+    project: str,
+    endpoint_id: str,
+    instances: Union[Dict, List[Dict]],
+    location: str = "europe-west6",
+    api_endpoint: str = "europe-west6-aiplatform.googleapis.com",
+):
+    """
+    `instances` can be either single instance of type dict or a list
+    of instances.
+    """
+
+    # Set up client options for GCP
+    client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
+
+    # Load credentials based on environment
+    if ENVIRONMENT == "development":
+        credentials = service_account.Credentials.from_service_account_file(
+            env("GOOGLE_APPLICATION_CREDENTIALS_DEV")
+        )
+    else:
+        credentials, _ = default()
+
+    # Initialize the client with the credentials
+    client = aiplatform.gapic.PredictionServiceClient(
+        client_options=client_options, credentials=credentials
+    )
+
+    instances = instances if isinstance(instances, list) else [instances]
+    instances = [
+        json_format.ParseDict(instance_dict, Value()) for instance_dict in instances
+    ]
+
+    parameters_dict = {}
+    parameters = json_format.ParseDict(parameters_dict, Value())
+    endpoint = client.endpoint_path(
+        project=project, location=location, endpoint=endpoint_id
+    )
+
+    response = client.predict(
+        endpoint=endpoint, instances=instances, parameters=parameters
+    )
+    print("deployed_model_id:", response.deployed_model_id)
+    # The predictions are a google.protobuf.Value representation of the model's predictions.
+    predictions = response.predictions
+    return predictions[0]  # embedded only one file
+
+
+# Set the GRPC_VERBOSITY environment variable
+os.environ["GRPC_VERBOSITY"] = "ERROR"
+os.environ["GRPC_TRACE"] = ""
+
+
+def embed_new_chip(ibex_chip):
+    chip_size = (288, 144)
+
+    # Determine if working locally or in production
+    database_is_local = not (
+        settings.ENVIRONMENT == "production" or settings.POSTGRES_LOCALLY == True
+    )
+    model_is_local = not (
+        settings.ENVIRONMENT == "production" or settings.GCP_MODEL_LOCALLY == True
+    )
+
+    if (not database_is_local) and (not model_is_local):
+        # get image from cloud storage and run on embedding endpoint as in production
+        chip_url = cloudinary.utils.cloudinary_url(ibex_chip.file.name)[0]
+        response = requests.get(chip_url)
+        if response.status_code == 200 and response.content:
+            chip_bytes = response.content  # Already encoded as bytes
+            print("Image loaded from cloud storage.")
+        else:
+            raise ValueError(
+                f"Failed to fetch image from Cloudinary: {response.status_code}"
+            )
+        chip_base64 = base64.b64encode(chip_bytes).decode("utf-8")
+        # Prepare the instance dictionary to match the model's expected input schema
+        model_input = {"bytes_inputs": {"b64": chip_base64}}
+        output = predict_custom_trained_model(
+            project="744617398606",
+            endpoint_id="8459945929317810176",
+            instances=model_input,
+        )
+        print("Embedded on model endpoint.")
+
+    elif database_is_local and model_is_local:
+        # Everything runs locally (complete dev environment)
+        chip_path = os.path.join(settings.MEDIA_ROOT, ibex_chip.file.name)
+        chip_bytes = tf.io.read_file(chip_path)
+        chip_image = tf.image.decode_jpeg(chip_bytes, channels=3)
+        print("Image loaded from local storage.")
+        chip_resized = tf.image.resize(chip_image, chip_size)
+        chip_expanded = tf.expand_dims(chip_resized, axis=0)
+        model = tf.saved_model.load("core/embedding_model/")
+        embedder = model.signatures["serving_default"]
+        output = embedder(chip_expanded)["output_tensor"].numpy().tolist()[0]
+        print("Embedded on local model.")
+
+    elif (not database_is_local) and model_is_local:
+        # get image from cloud storage and run with local model
+        chip_url = cloudinary.utils.cloudinary_url(ibex_chip.file.name)[0]
+        response = requests.get(chip_url)
+        if response.status_code == 200 and response.content:
+            chip_bytes = response.content  # Already encoded as bytes
+            chip_image = tf.image.decode_jpeg(chip_bytes, channels=3)
+            print("Image loaded from cloud storage.")
+        else:
+            raise ValueError(
+                f"Failed to fetch image from Cloudinary: {response.status_code}"
+            )
+        chip_resized = tf.image.resize(chip_image, chip_size)
+        chip_expanded = tf.expand_dims(chip_resized, axis=0)
+        model = tf.saved_model.load("core/embedding_model/")
+        embedder = model.signatures["serving_default"]
+        output = embedder(chip_expanded)["output_tensor"].numpy().tolist()[0]
+        print("Embedded on local model.")
+
+    else:
+        # get image from local storage but run on embedding endpoint
+        chip_path = os.path.join(settings.MEDIA_ROOT, ibex_chip.file.name)
+        with open(chip_path, "rb") as img_file:
+            chip_image = img_file.read()
+        print("Image loaded from local storage.")
+        chip_base64 = base64.b64encode(chip_image).decode("utf-8")
+        # Prepare the instance dictionary to match the model's expected input schema
+        model_input = {"bytes_inputs": {"b64": chip_base64}}
+        output = predict_custom_trained_model(
+            project="744617398606",
+            endpoint_id="8459945929317810176",
+            instances=model_input,
+        )
+        print("Embedded on model endpoint.")
+
+    # Save the embedding to the database
+    print(output)
+    # Embedding.objects.create(ibex_chip=ibex_chip, embedding=output)
+    print("Embedding created and saved.")
