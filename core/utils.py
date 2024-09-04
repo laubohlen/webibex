@@ -218,6 +218,20 @@ def parse_datetime_from_filename(filename: str):
     return None
 
 
+def protobuf_to_list(protobuf_obj):
+    """
+    Recursively converts a Protobuf message or a repeated field (like RepeatedComposite) into a Python dictionary or list.
+    """
+    if isinstance(protobuf_obj, Value):  # Protobuf `Value` object
+        return json_format.MessageToDict(protobuf_obj)
+    elif isinstance(
+        protobuf_obj, list
+    ):  # List of Protobuf messages (like RepeatedComposite)
+        return [protobuf_to_list(item) for item in protobuf_obj]
+    else:
+        return protobuf_obj  # For non-Protobuf objects, return as-is
+
+
 def predict_custom_trained_model(
     project: str,
     endpoint_id: str,
@@ -262,8 +276,8 @@ def predict_custom_trained_model(
     )
     print("deployed_model_id:", response.deployed_model_id)
     # The predictions are a google.protobuf.Value representation of the model's predictions.
-    predictions = response.predictions
-    return predictions[0]  # embedded only one file
+    output = [list(i) for i in response.predictions]
+    return output[0]  # embedded only one file
 
 
 # Set the GRPC_VERBOSITY environment variable
@@ -352,6 +366,5 @@ def embed_new_chip(ibex_chip):
         print("Embedded on model endpoint.")
 
     # Save the embedding to the database
-    print(output)
-    # Embedding.objects.create(ibex_chip=ibex_chip, embedding=output)
+    Embedding.objects.create(ibex_chip=ibex_chip, embedding=output)
     print("Embedding created and saved.")
