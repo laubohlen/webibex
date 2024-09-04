@@ -1,11 +1,5 @@
 import os
-import json
 import datetime
-import requests
-import tensorflow as tf
-import numpy as np
-
-import cloudinary.utils
 
 from django.dispatch import receiver
 from django.db.models.signals import post_save, post_delete, pre_save
@@ -15,17 +9,12 @@ from django.utils.text import get_valid_filename as get_valid_filename_django
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.conf import settings
-from django.shortcuts import get_object_or_404
 from allauth.account.signals import user_signed_up
-from io import BytesIO
-from environ import Env
 
-from .models import IbexImage, IbexChip, Embedding, Animal
+from .models import IbexImage, IbexChip
 from simple_landmarks.models import LandmarkItem, Landmark
 from filer.models import Folder
 
-from . import utils
 
 User = get_user_model()
 
@@ -128,67 +117,6 @@ def delete_ibexchip_file(sender, instance, **kwargs):
         instance.file.delete(
             save=False
         )  # Delete the file without saving the model again
-
-
-# @receiver(post_save, sender=IbexChip)
-# def embed_new_chip(sender, instance, created, **kwargs):
-#     ibexchip = instance
-#     chip_size = (288, 144)
-
-#     if created:
-#         # Determine if working locally or in production
-#         is_local = not (settings.ENVIRONMENT == "production" or settings.POSTGRES_LOCALLY == True)
-        
-#         if is_local:
-#             # Handle local file path
-#             chip_path = os.path.join(settings.MEDIA_ROOT, ibexchip.file.name)
-#             chip_encoded = tf.io.read_file(chip_path)
-#             chip_decoded = tf.image.decode_jpeg(chip_encoded, channels=3)
-#             print("Chip loaded and decoded from local storage.")
-#         else:
-#             # Download the image from Cloudinary
-#             chip_url = cloudinary.utils.cloudinary_url(ibexchip.file.name)[0]
-#             response = requests.get(chip_url)
-
-#             if response.status_code == 200 and response.content:
-#                 chip_encoded = response.content  # Already encoded as bytes
-#                 chip_decoded = tf.image.decode_jpeg(chip_encoded, channels=3)
-#                 print("Chip loaded and decoded from Cloudinary.")
-#             else:
-#                 raise ValueError(f"Failed to fetch image from Cloudinary: {response.status_code}")
-        
-
-#         # Resize and expand dimensions for embedding
-#         chip_resized = tf.image.resize(chip_decoded, chip_size)
-#         chip = tf.expand_dims(chip_resized, axis=0)
-
-#         # Log the shape and data type of the tensor
-#         print(f"Tensor shape: {chip.shape}, dtype: {chip.dtype}")
-
-#         # Convert the tensor to a list format that can be JSON serialized
-#         chip_list = chip.numpy().tolist()
-
-#         # Convert to JSON and measure the size
-#         chip_json = json.dumps({"input_tensor": chip_list})
-#         print(f"Request size: {len(chip_json)} bytes")
-
-#         # Prepare the instance dictionary to match the model's expected input schema
-#         model_input = {"input_tensor": chip_list}  # Use the correct key expected by your model
-
-#         utils.predict_custom_trained_model_sample(
-#             project="744617398606",
-#             endpoint_id="4903228123601960960",
-#             instances=model_input,
-#         )
-
-#         # # Load the embedding model and generate the embedding
-#         # model = tf.saved_model.load("core/embedding_model/")
-#         # embedder = model.signatures["serving_default"]
-#         # output = embedder(chip)["output_tensor"].numpy().tolist()[0]
-
-#         # Save the embedding to the database
-#         # Embedding.objects.create(ibex_chip=ibexchip, embedding=output)
-#         print("Embedding created and saved.")
 
 
 @receiver(pre_save, sender=IbexImage)

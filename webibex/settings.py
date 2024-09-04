@@ -120,12 +120,12 @@ POSTGRES_LOCALLY = False
 if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
     DATABASES["default"] = dj_database_url.parse(env("DATABASE_URL"))
 
-GCP_MODEL_LOCALLY = True
-# Set up Google Cloud credentials based on the environment
-if ENVIRONMENT == "production" or GCP_MODEL_LOCALLY == False:
-    # For production, use the environment variable or other setup
-    credentials, project = google.auth.default()
 
+GCP_MODEL_LOCALLY = False
+# Set up Google Cloud credentials based on the environment
+if ENVIRONMENT == "production":
+    # For production, use defualt secret file location
+    credentials, project = google.auth.default()
 else:
     # Path to your service account JSON file for development
     GOOGLE_APPLICATION_CREDENTIALS_DEV = env("GOOGLE_APPLICATION_CREDENTIALS_DEV")

@@ -1,6 +1,5 @@
 import os
 import cv2
-import time
 import shutil
 import requests
 import numpy as np
@@ -16,7 +15,6 @@ from django.db.models.aggregates import Count
 from django.http import HttpResponseRedirect, HttpResponse
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
-from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 
 from pathlib import Path

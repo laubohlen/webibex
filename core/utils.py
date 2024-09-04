@@ -2,11 +2,9 @@ import os
 import re
 import cv2
 import math
-import json
 import base64
 import requests
 import datetime
-import tensorflow as tf
 import numpy as np
 
 import cloudinary.utils
@@ -18,10 +16,10 @@ from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value
 from google.auth import default
 from google.oauth2 import service_account
+
 from django.conf import settings
 
 from core.models import Animal, Embedding
-
 
 from environ import Env
 
@@ -30,6 +28,24 @@ env = Env()
 Env.read_env()
 
 ENVIRONMENT = env("ENVIRONMENT", default="production")
+
+# model_is_local = settings.ENVIRONMENT != "production" and not settings.GCP_MODEL_LOCALLY
+# if model_is_local:
+#     import tensorflow as tf
+
+#     print(tf.__version__)
+
+_tf = None
+
+
+def get_tf():
+    global _tf
+    if _tf is None:
+        import tensorflow as tf
+
+        print(tf.__version__)
+        _tf = tf
+    return _tf
 
 
 # snipet from https://github.com/krasch/simple_landmarks
@@ -318,6 +334,7 @@ def embed_new_chip(ibex_chip):
         print("Embedded on model endpoint.")
 
     elif database_is_local and model_is_local:
+        tf = get_tf()
         # Everything runs locally (complete dev environment)
         chip_path = os.path.join(settings.MEDIA_ROOT, ibex_chip.file.name)
         chip_bytes = tf.io.read_file(chip_path)
@@ -331,6 +348,7 @@ def embed_new_chip(ibex_chip):
         print("Embedded on local model.")
 
     elif (not database_is_local) and model_is_local:
+        tf = get_tf()
         # get image from cloud storage and run with local model
         chip_url = cloudinary.utils.cloudinary_url(ibex_chip.file.name)[0]
         response = requests.get(chip_url)
