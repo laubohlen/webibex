@@ -1,0 +1,15 @@
+django-filer==3.1.1 # installs django
+django-filer[heif] # support .heic images
+django-allauth
+django-environ
+django-debug-toolbar
+Pillow
+whitenoise
+opencv-python
+mysqlclient # worked after 'brew install mysql'
+dj-database-url # lets django connect to postgres db
+psycopg2-binary # lets django talk to postgres db
+gunicorn # wsgi instead of manage.py runserver
+django-cloudinary-storage 
+google-cloud-aiplatform
+setuptools
