@@ -201,6 +201,7 @@ if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
     AWS_STORAGE_BUCKET_NAME=env("AWS_STORAGE_BUCKET_NAME")
     AWS_S3_REGION_NAME=env("AWS_S3_REGION_NAME")
     AWS_S3_ENDPOINT_URL=env("AWS_S3_ENDPOINT_URL")
+    AWS_LOCATION = 'media'
 else:
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
