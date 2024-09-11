@@ -23,6 +23,11 @@ env = Env()
 Env.read_env()
 ENVIRONMENT = env("ENVIRONMENT", default="production")
 
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
+AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL")
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -59,8 +64,6 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "cloudinary_storage",
-    "cloudinary",
     "allauth",
     "allauth.account",
     "filer",
@@ -187,7 +190,6 @@ LOGIN_REDIRECT_URL = "/"
 MEDIA_URL = "/media/"
 
 if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
-    # DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
     STORAGES = {
         "default": {
             "BACKEND": "storages.backends.s3.S3Storage",
@@ -204,12 +206,6 @@ if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
     AWS_LOCATION = 'media'
 else:
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
-
-CLOUDINARY_STORAGE = {
-    "CLOUD_NAME": env("CLOUD_NAME"),
-    "API_KEY": env("CLOUD_API_KEY"),
-    "API_SECRET": env("CLOUD_API_SECRET"),
-}
 
 FILER_ENABLE_PERMISSIONS = True
 FILER_IMAGE_MODEL = "core.IbexImage"
