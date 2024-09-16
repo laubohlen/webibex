@@ -46,7 +46,9 @@ if ENVIRONMENT == "development":
 else:
     DEBUG = False
 
-ALLOWED_HOSTS = ["*", "127.0.0.1", "localhost:8000"]
+ALLOWED_HOSTS = ["wibex.up.railway.app", "127.0.0.1", "localhost:8000"]
+
+CSRF_TRUSTED_ORIGINA = ["https://wibex.up.railway.app"]
 
 AUTHENTICATION_BACKENDS = [
     # Needed to login by username in Django admin, regardless of `allauth`
