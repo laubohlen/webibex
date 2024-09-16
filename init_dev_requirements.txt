@@ -11,6 +11,7 @@ mysqlclient # worked after 'brew install mysql'
 dj-database-url # lets django connect to postgres db
 psycopg2-binary # lets django talk to postgres db
 gunicorn # wsgi instead of manage.py runserver
-django-cloudinary-storage
 google-cloud-aiplatform
 setuptools
+boto3[crt]
+django-storages[s3]
