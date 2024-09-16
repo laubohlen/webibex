@@ -3,11 +3,8 @@ import re
 import cv2
 import math
 import base64
-import requests
 import datetime
 import numpy as np
-
-import cloudinary.utils
 
 from typing import Dict, List, Union
 
@@ -22,6 +19,8 @@ from django.conf import settings
 from core.models import Animal, Embedding
 
 from environ import Env
+
+from . import b2_utils
 
 # Initialize environment variables
 env = Env()
@@ -314,16 +313,20 @@ def embed_new_chip(ibex_chip):
 
     if (not database_is_local) and (not model_is_local):
         # get image from cloud storage and run on embedding endpoint as in production
-        chip_url = cloudinary.utils.cloudinary_url(ibex_chip.file.name)[0]
-        response = requests.get(chip_url)
-        if response.status_code == 200 and response.content:
-            chip_bytes = response.content  # Already encoded as bytes
-            print("Image loaded from cloud storage.")
-        else:
+        chip_bucket_path = os.path.join(settings.AWS_LOCATION, ibex_chip.file.name)
+        img_object = b2_utils.download_file(bucket_file_path=chip_bucket_path)
+        if img_object is None:
+            raise ValueError("Failed to download image from Backblaze B2.")
+        # Convert the downloaded content (bytes) to a NumPy array
+        img_array = np.frombuffer(img_object, np.uint8)
+        # Decode the image from the NumPy array to check that it's valid
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if img is None:
             raise ValueError(
-                f"Failed to fetch image from Cloudinary: {response.status_code}"
+                "Failed to decode image. The file may be corrupted or invalid."
             )
-        chip_base64 = base64.b64encode(chip_bytes).decode("utf-8")
+
+        chip_base64 = base64.b64encode(img_object).decode("utf-8")
         # Prepare the instance dictionary to match the model's expected input schema
         model_input = {"bytes_inputs": {"b64": chip_base64}}
         output = predict_custom_trained_model(
@@ -350,16 +353,14 @@ def embed_new_chip(ibex_chip):
     elif (not database_is_local) and model_is_local:
         tf = get_tf()
         # get image from cloud storage and run with local model
-        chip_url = cloudinary.utils.cloudinary_url(ibex_chip.file.name)[0]
-        response = requests.get(chip_url)
-        if response.status_code == 200 and response.content:
-            chip_bytes = response.content  # Already encoded as bytes
-            chip_image = tf.image.decode_jpeg(chip_bytes, channels=3)
-            print("Image loaded from cloud storage.")
-        else:
-            raise ValueError(
-                f"Failed to fetch image from Cloudinary: {response.status_code}"
-            )
+        chip_bucket_path = os.path.join(settings.AWS_LOCATION, ibex_chip.file.name)
+        img_object = b2_utils.download_file(bucket_file_path=chip_bucket_path)
+        if img_object is None:
+            raise ValueError("Failed to download image from Backblaze B2.")
+        # Convert the downloaded content (bytes) to a NumPy array
+        chip_array = np.frombuffer(img_object, np.uint8)
+        # Decode the image from the NumPy array to check that it's valid
+        chip_image = cv2.imdecode(chip_array, cv2.IMREAD_COLOR)
         chip_resized = tf.image.resize(chip_image, chip_size)
         chip_expanded = tf.expand_dims(chip_resized, axis=0)
         model = tf.saved_model.load("core/embedding_model/")

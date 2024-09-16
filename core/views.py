@@ -4,15 +4,11 @@ import shutil
 import requests
 import numpy as np
 
-import cloudinary.uploader
-import cloudinary.api
-import cloudinary.utils
-
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.aggregates import Count
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.core.files.base import ContentFile
@@ -22,7 +18,7 @@ from io import BytesIO
 from PIL import Image
 from core.models import IbexImage, IbexChip, Animal, Embedding
 from simple_landmarks.models import LandmarkItem, Landmark
-from . import utils
+from . import utils, b2_utils
 
 
 def welcome_view(request):
@@ -280,44 +276,48 @@ def chip_view(request, oid):
             ibex_chip = IbexChip.objects.get(ibex_image_id=image.id)
             # If the object is found, continue with your logic here
             print(f"IbexChip found in database with ibex_image_id: {image.id}")
-            print("Deleting previous ibex chip media file on Cloudinary..")
-            chip_public_id = ibex_chip.file.name
-            try:
-                delete_response = cloudinary.api.delete_resources([chip_public_id])
-                if (
-                    delete_response.get("deleted", {}).get(chip_public_id)
-                    == "not_found"
-                ):
-                    print("Resource not found on Cloudinary.")
-                else:
-                    ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
-                    print("IbexChip found in the database, deleting...")
-                    ibex_chip.delete()
-                    print(
-                        "IbexChip already existed on Cloudinary, deleted successfully before continueing."
-                    )
-            except:
-                print(f"An error occurred with Cloudinary.")
-                pass
+            print("Deleting previous ibex chip media file on backblaze..")
+            # chip_public_id = ibex_chip.file.name
+            image_bucket_path = os.path.join(settings.AWS_LOCATION, image.file.name)
+            chip_bucket_path = os.path.dirname(image_bucket_path)
+            chip_bucket_path = os.path.join(chip_bucket_path, chip_name)
+            # Check if the file exists in the B2 bucket
+            file_exists = b2_utils.check_file_exists(chip_bucket_path)
+
+            # If the file exists, proceed with deletion
+            if file_exists:
+                # Delete the file from Backblaze B2 bucket
+                b2_utils.delete_files([chip_bucket_path])
+
+                # Delete the associated IbexChip object from the database
+                ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
+                ibex_chip.delete()
+                print(
+                    f"File {chip_bucket_path} deleted from B2 bucket and IbexChip deleted from the database."
+                )
+            else:
+                print(
+                    "IbexChip not deleted because the file was not found in the B2 bucket."
+                )
+
         except IbexChip.DoesNotExist:
             # Handle the case where the object does not exist
             print("IbexChip does not exist already, continueing normally..")
             pass
 
-        # Download the image from Cloudinary
-        img_url = cloudinary.utils.cloudinary_url(image.file.name)[0]
-        response = requests.get(img_url)
-
+        # Download the image from cloud
+        bucket_file_path = os.path.join(settings.AWS_LOCATION, image.file.name)
+        img_object = b2_utils.download_file(bucket_file_path=bucket_file_path)
         # Convert the response content to a NumPy array
-        img_array = np.frombuffer(response.content, np.uint8)
+        img_array = np.frombuffer(img_object, np.uint8)
 
         # Decode the image from the NumPy array
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
         if img is None:
-            raise ValueError("Failed to load image from Cloudinary")
+            raise ValueError("Failed to load image from cloud.")
 
-        print("Downloaded image from cloudinary.")
+        print("Downloaded image from cloud.")
 
     # load landmarks
     content_type = ContentType.objects.get_for_model(IbexImage)
@@ -373,7 +373,7 @@ def chip_view(request, oid):
         ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
         print("Loaded ibex chip object")
     else:
-        # Convert the image to the correct format for Cloudinary
+        # Convert the image to the correct format for backblaze
         buffer = BytesIO()
         img_pil = Image.fromarray(cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
         img_pil.save(buffer, format="png")
@@ -385,7 +385,7 @@ def chip_view(request, oid):
         # Create the IbexChip instance
         ibex_chip = IbexChip(ibex_image_id=image.id)
         ibex_chip.file.save(chip_name, chip_content)
-        print("Chip saved on Cloudinary using Django's FileField.")
+        print("Chip saved on Backblaze using Django's FileField.")
         chip_url = ibex_chip.file.url
 
     # Call the custom method to process and embed the chip
@@ -557,18 +557,11 @@ def created_animal_view(request, oid):
 
 
 def test_view(request):
-    if request.method == "POST":
-        print("**********")
-        selected_image = request.POST.get("selectedImage")
-        print(selected_image)
+    from environ import Env
 
-        if selected_image:
-            # Process the selected image value here
-            # For example, you could save it to the database or perform some logic
-            return HttpResponse(f"Selected Animal: {selected_image}")
-        else:
-            selected_image = None
-            return HttpResponse("No Animal was selected.")
+    env = Env()
+    Env.read_env()
+    ENVIRONMENT = env("ENVIRONMENT", default="production")
 
     # If not a POST request, just render the form
-    return render(request, "test.html", {"selected_image": selected_image})
+    return render(request, "test.html")
