@@ -283,21 +283,23 @@ def chip_view(request, oid):
             ibex_chip = IbexChip.objects.get(ibex_image_id=image.id)
             # If the object is found, continue with your logic here
             print(f"IbexChip found in database with ibex_image_id: {image.id}")
-            print("Deleting previous ibex chip media file on Cloudinary..")
+            print("Deleting previous ibex chip media file on backblaze..")
             # chip_public_id = ibex_chip.file.name
-            chip_file_path = os.path.join(settings.AWS_LOCATION, image.file.name)
+            image_bucket_path = os.path.join(settings.AWS_LOCATION, image.file.name)
+            chip_bucket_path = os.path.dirname(image_bucket_path)
+            chip_bucket_path = os.path.join(chip_bucket_path, chip_name)
             # Check if the file exists in the B2 bucket
-            file_exists = b2_utils.check_file_exists(chip_file_path)
+            file_exists = b2_utils.check_file_exists(chip_bucket_path)
             
             # If the file exists, proceed with deletion
             if file_exists:
                 # Delete the file from Backblaze B2 bucket
-                b2_utils.delete_files([bucket_file_path])
+                b2_utils.delete_files([chip_bucket_path])
                 
                 # Delete the associated IbexChip object from the database
                 ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
                 ibex_chip.delete()
-                print(f"File {bucket_file_path} deleted from B2 bucket and IbexChip deleted from the database.")
+                print(f"File {chip_bucket_path} deleted from B2 bucket and IbexChip deleted from the database.")
             else:
                 print("IbexChip not deleted because the file was not found in the B2 bucket.")
 
@@ -374,7 +376,7 @@ def chip_view(request, oid):
         ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
         print("Loaded ibex chip object")
     else:
-        # Convert the image to the correct format for Cloudinary
+        # Convert the image to the correct format for backblaze
         buffer = BytesIO()
         img_pil = Image.fromarray(cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
         img_pil.save(buffer, format="png")
@@ -386,11 +388,11 @@ def chip_view(request, oid):
         # Create the IbexChip instance
         ibex_chip = IbexChip(ibex_image_id=image.id)
         ibex_chip.file.save(chip_name, chip_content)
-        print("Chip saved on Cloudinary using Django's FileField.")
+        print("Chip saved on Backblaze using Django's FileField.")
         chip_url = ibex_chip.file.url
 
     # Call the custom method to process and embed the chip
-    utils.embed_new_chip(ibex_chip)
+    # utils.embed_new_chip(ibex_chip)
 
     # eye_x_scaled, eye_y_scaled = scale_coordinate(
     #     eye_landmark.x_coordinate,

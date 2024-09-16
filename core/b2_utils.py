@@ -22,21 +22,30 @@ def get_b2_resource(endpoint=AWS_S3_ENDPOINT_URL, key_id=AWS_ACCESS_KEY_ID, appl
                         config = Config(
                             signature_version='s3v4',
                     ))
+    print("b2", b2)
     return b2
 
 
 # return a file object from a bucket
-def download_file(bucket_file_path, b2_resource=get_b2_resource(), bucket_name=AWS_STORAGE_BUCKET_NAME):
-    response = b2_resource.get_object(Bucket=bucket_name, Key=bucket_file_path)
-    file_content = response['Body'].read()
-    return file_content
+def download_file(bucket_file_path, bucket_name=AWS_STORAGE_BUCKET_NAME):
+    b2_resource = get_b2_resource()
+    # create a client 
+    s3_client = b2_resource.meta.client
+    try:
+        # Use the client to get the object (file) from the bucket
+        response = s3_client.get_object(Bucket=bucket_name, Key=bucket_file_path)
+        # Read the file content
+        file_content = response['Body'].read()
+        return file_content
+    except ClientError as e:
+        print(f"Error occurred while downloading the file: {e}")
+        return None
 
 
 # Delete the specified objects from B2
-def delete_files(bucket_file_path_list, b2_resource=get_b2_resource(), bucket_name=AWS_STORAGE_BUCKET_NAME):
-    objects = []
-    for key in bucket_file_path_list:
-        objects.append({'Key': key})
+def delete_files(bucket_file_path_list, bucket_name=AWS_STORAGE_BUCKET_NAME):
+    b2_resource = get_b2_resource()
+    objects = [{'Key': key} for key in bucket_file_path_list]
     try:
         b2_resource.Bucket(bucket_name).delete_objects(Delete={'Objects': objects})
     except ClientError as ce:
@@ -44,7 +53,8 @@ def delete_files(bucket_file_path_list, b2_resource=get_b2_resource(), bucket_na
     
 
 # check if file exists in the b2 bucket
-def check_file_exists(bucket_file_path, b2_resource=get_b2_resource(), bucket_name=AWS_STORAGE_BUCKET_NAME):
+def check_file_exists(bucket_file_path, bucket_name=AWS_STORAGE_BUCKET_NAME):
+    b2_resource = get_b2_resource()
     try:
         b2_resource.meta.client.head_object(Bucket=bucket_name, Key=bucket_file_path)
         return True
