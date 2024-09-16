@@ -1,3 +1,9 @@
+# fly.io deploy 
+.github/
+.dockerignore
+Dockerfile
+fly.toml
+
 webibex.code-workspace
 node/
 static/
