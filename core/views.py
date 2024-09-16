@@ -4,21 +4,14 @@ import shutil
 import requests
 import numpy as np
 
-# import cloudinary.uploader
-# import cloudinary.api
-# import cloudinary.utils
-
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.aggregates import Count
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 from django.core.files.base import ContentFile
-
-import boto3
-from botocore.exceptions import ClientError
 
 from pathlib import Path
 from io import BytesIO
@@ -290,18 +283,22 @@ def chip_view(request, oid):
             chip_bucket_path = os.path.join(chip_bucket_path, chip_name)
             # Check if the file exists in the B2 bucket
             file_exists = b2_utils.check_file_exists(chip_bucket_path)
-            
+
             # If the file exists, proceed with deletion
             if file_exists:
                 # Delete the file from Backblaze B2 bucket
                 b2_utils.delete_files([chip_bucket_path])
-                
+
                 # Delete the associated IbexChip object from the database
                 ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
                 ibex_chip.delete()
-                print(f"File {chip_bucket_path} deleted from B2 bucket and IbexChip deleted from the database.")
+                print(
+                    f"File {chip_bucket_path} deleted from B2 bucket and IbexChip deleted from the database."
+                )
             else:
-                print("IbexChip not deleted because the file was not found in the B2 bucket.")
+                print(
+                    "IbexChip not deleted because the file was not found in the B2 bucket."
+                )
 
         except IbexChip.DoesNotExist:
             # Handle the case where the object does not exist
@@ -561,9 +558,10 @@ def created_animal_view(request, oid):
 
 def test_view(request):
     from environ import Env
+
     env = Env()
     Env.read_env()
-    ENVIRONMENT = env("ENVIRONMENT", default="production") 
+    ENVIRONMENT = env("ENVIRONMENT", default="production")
 
     # If not a POST request, just render the form
     return render(request, "test.html")

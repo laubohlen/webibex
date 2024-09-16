@@ -3,11 +3,8 @@ import re
 import cv2
 import math
 import base64
-import requests
 import datetime
 import numpy as np
-
-import cloudinary.utils
 
 from typing import Dict, List, Union
 
@@ -325,7 +322,9 @@ def embed_new_chip(ibex_chip):
         # Decode the image from the NumPy array to check that it's valid
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         if img is None:
-            raise ValueError("Failed to decode image. The file may be corrupted or invalid.")
+            raise ValueError(
+                "Failed to decode image. The file may be corrupted or invalid."
+            )
 
         chip_base64 = base64.b64encode(img_object).decode("utf-8")
         # Prepare the instance dictionary to match the model's expected input schema
