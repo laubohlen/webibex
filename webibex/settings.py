@@ -11,11 +11,12 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 import os
+import json
 import dj_database_url
 from pathlib import Path
 from environ import Env
 
-import google.auth
+from google.cloud import aiplatform
 from google.oauth2 import service_account
 
 # environment setup
@@ -124,19 +125,14 @@ if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
     DATABASES["default"] = dj_database_url.parse(env("DATABASE_URL"))
 
 
-GCP_MODEL_LOCALLY = False
-# Set up Google Cloud credentials based on the environment
-if ENVIRONMENT == "production":
-    # For production, use defualt secret file location
-    credentials, project = google.auth.default()
-else:
-    # Path to your service account JSON file for development
-    GOOGLE_APPLICATION_CREDENTIALS_DEV = env("GOOGLE_APPLICATION_CREDENTIALS_DEV")
-
-    # Load the credentials manually
-    credentials = service_account.Credentials.from_service_account_file(
-        GOOGLE_APPLICATION_CREDENTIALS_DEV
-    )
+GCP_MODEL_LOCALLY = True
+# Set up Google Cloud credentials
+# Load credentials from the environment variable
+credentials_info = json.loads(env("GOOGLE_CREDENTIALS"))
+# Create credentials object
+credentials = service_account.Credentials.from_service_account_info(credentials_info)
+# Initialize the Vertex AI client with the credentials
+aiplatform.init(project="wibex-434414", credentials=credentials)
 
 
 # Password validation
