@@ -1,7 +1,6 @@
 import os
 import cv2
 import shutil
-import requests
 import numpy as np
 
 from django.conf import settings
