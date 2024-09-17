@@ -5,7 +5,7 @@ django-environ
 django-debug-toolbar
 Pillow
 whitenoise
-opencv-python
+opencv-python-headless # avoid pulling in complete X11 stack
 mysqlclient # worked after 'brew install mysql'
 dj-database-url # lets django connect to postgres db
 psycopg2-binary # lets django talk to postgres db
