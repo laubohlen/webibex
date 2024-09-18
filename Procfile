@@ -1,1 +1,1 @@
-web: gunicorn webibex.wsgi
+web: gunicorn webibex.wsgi --workers 1 --threads 1 --timeout 120
