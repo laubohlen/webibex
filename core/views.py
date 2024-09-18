@@ -130,7 +130,10 @@ def unobserved_animal_view(request):
 @login_required
 def to_landmark_images_view(request):
     # get all images that have no animal ID
-    images_to_landmark = IbexImage.objects.filter(animal_id__isnull=True)
+    user_id = request.user.id
+    images_to_landmark = IbexImage.objects.filter(owner_id=user_id).filter(
+        animal_id__isnull=True
+    )
     return render(
         request,
         "core/to_landmark.html",
