@@ -220,7 +220,7 @@ FILER_ADD_FILE_VALIDATORS = {
     "image/svg+xml": ["filer.validation.deny"],
 }
 # https://django-filer.readthedocs.io/en/latest/validation.html
-FILER_MIME_TYPE_WHITELIST = ["image/*"]
+# FILER_MIME_TYPE_WHITELIST = ["image/*"]
 LANDMARK_IMAGE_WIDTH = 1600  # pixels
 CHIP_FILETYPE = "png"
 CHIP_WIDTH = 144
