@@ -1,1 +1,1 @@
-web: gunicorn webibex.wsgi
+web: gunicorn webibex.wsgi --timeout 120
