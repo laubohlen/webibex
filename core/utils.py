@@ -2,6 +2,7 @@ import os
 import re
 import cv2
 import math
+import json
 import base64
 import datetime
 import numpy as np
@@ -263,12 +264,13 @@ def predict_custom_trained_model(
     client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
 
     # Load credentials based on environment
-    if ENVIRONMENT == "development":
-        credentials = service_account.Credentials.from_service_account_file(
-            env("GOOGLE_APPLICATION_CREDENTIALS_DEV")
-        )
-    else:
-        credentials, _ = default()
+    credentials_info = json.loads(env("GOOGLE_CREDENTIALS"))
+    # Create credentials object
+    credentials = service_account.Credentials.from_service_account_info(
+        credentials_info
+    )
+    # Initialize the Vertex AI client with the credentials
+    aiplatform.init(project="wibex-434414", credentials=credentials)
 
     # Initialize the client with the credentials
     client = aiplatform.gapic.PredictionServiceClient(
@@ -327,6 +329,7 @@ def embed_new_chip(ibex_chip):
             )
 
         chip_base64 = base64.b64encode(img_object).decode("utf-8")
+        print("decoded image as base64")
         # Prepare the instance dictionary to match the model's expected input schema
         model_input = {"bytes_inputs": {"b64": chip_base64}}
         output = predict_custom_trained_model(
