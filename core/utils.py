@@ -259,7 +259,8 @@ def predict_custom_trained_model(
     `instances` can be either single instance of type dict or a list
     of instances.
     """
-
+    print("Model not available at the moment.")
+    return
     # Set up client options for GCP
     client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
 
