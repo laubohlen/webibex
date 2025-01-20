@@ -2,18 +2,10 @@ import os
 import re
 import cv2
 import math
-import json
 import base64
+import requests
 import datetime
 import numpy as np
-
-from typing import Dict, List, Union
-
-from google.cloud import aiplatform
-from google.protobuf import json_format
-from google.protobuf.struct_pb2 import Value
-from google.auth import default
-from google.oauth2 import service_account
 
 from django.conf import settings
 
@@ -234,73 +226,36 @@ def parse_datetime_from_filename(filename: str):
     return None
 
 
-def protobuf_to_list(protobuf_obj):
-    """
-    Recursively converts a Protobuf message or a repeated field (like RepeatedComposite) into a Python dictionary or list.
-    """
-    if isinstance(protobuf_obj, Value):  # Protobuf `Value` object
-        return json_format.MessageToDict(protobuf_obj)
-    elif isinstance(
-        protobuf_obj, list
-    ):  # List of Protobuf messages (like RepeatedComposite)
-        return [protobuf_to_list(item) for item in protobuf_obj]
-    else:
-        return protobuf_obj  # For non-Protobuf objects, return as-is
-
-
-def predict_custom_trained_model(
-    project: str,
-    endpoint_id: str,
-    instances: Union[Dict, List[Dict]],
-    location: str = "europe-west6",
-    api_endpoint: str = "europe-west6-aiplatform.googleapis.com",
+def endpoint_inference(
+    input_b64_img,
+    endpoint_id: str = env("RUNPOD_ENDPOINT_ID"),
+    endpoint_api_key: str = env("RUNPOD_API_KEY"),
 ):
-    """
-    `instances` can be either single instance of type dict or a list
-    of instances.
-    """
-    print("Model not available at the moment.")
-    return
-    # Set up client options for GCP
-    client_options = {"api_endpoint": f"{location}-aiplatform.googleapis.com"}
+    # Make the POST request to the RunPod endpoint
+    endpoint_url = f"https://api.runpod.ai/v2/{env("RUNPOD_ENDPOINT_ID")}/runsync"
+    headers = {
+        "accept": "application/json",
+        "authorization": env("RUNPOD_API_KEY"),
+        "content-type": "application/json",
+    }
 
-    # Load credentials based on environment
-    credentials_info = json.loads(env("GOOGLE_CREDENTIALS"))
-    # Create credentials object
-    credentials = service_account.Credentials.from_service_account_info(
-        credentials_info
-    )
-    # Initialize the Vertex AI client with the credentials
-    aiplatform.init(project="wibex-434414", credentials=credentials)
+    try:
+        response = requests.post(endpoint_url, headers=headers, json=input_b64_img)
+        response.raise_for_status()  # Raise an error for HTTP status codes >= 400
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f"Failed to reach RunPod endpoint: {e}")
 
-    # Initialize the client with the credentials
-    client = aiplatform.gapic.PredictionServiceClient(
-        client_options=client_options, credentials=credentials
-    )
+    # Parse the response from the endpoint
+    response_data = response.json()
+    if "error" in response_data:
+        raise ValueError(f"RunPod error: {response_data['error']}")
 
-    instances = instances if isinstance(instances, list) else [instances]
-    instances = [
-        json_format.ParseDict(instance_dict, Value()) for instance_dict in instances
-    ]
+    output = response_data.get("output").get("output").get("output_tensor")[0]
+    if not output:
+        raise ValueError("No output received from RunPod endpoint.")
 
-    parameters_dict = {}
-    parameters = json_format.ParseDict(parameters_dict, Value())
-    endpoint = client.endpoint_path(
-        project=project, location=location, endpoint=endpoint_id
-    )
-
-    response = client.predict(
-        endpoint=endpoint, instances=instances, parameters=parameters
-    )
-    print("deployed_model_id:", response.deployed_model_id)
-    # The predictions are a google.protobuf.Value representation of the model's predictions.
-    output = [list(i) for i in response.predictions]
-    return output[0]  # embedded only one file
-
-
-# Set the GRPC_VERBOSITY environment variable
-os.environ["GRPC_VERBOSITY"] = "ERROR"
-os.environ["GRPC_TRACE"] = ""
+    print("Embedded on endpoint.")
+    return output
 
 
 def embed_new_chip(ibex_chip):
@@ -311,7 +266,7 @@ def embed_new_chip(ibex_chip):
         settings.ENVIRONMENT == "production" or settings.POSTGRES_LOCALLY == True
     )
     model_is_local = not (
-        settings.ENVIRONMENT == "production" or settings.GCP_MODEL_LOCALLY == True
+        settings.ENVIRONMENT == "production" or settings.ENDPOINT_LOCALLY == True
     )
 
     if (not database_is_local) and (not model_is_local):
@@ -332,11 +287,9 @@ def embed_new_chip(ibex_chip):
         chip_base64 = base64.b64encode(img_object).decode("utf-8")
         print("decoded image as base64")
         # Prepare the instance dictionary to match the model's expected input schema
-        model_input = {"bytes_inputs": {"b64": chip_base64}}
-        output = predict_custom_trained_model(
-            project="744617398606",
-            endpoint_id="8459945929317810176",
-            instances=model_input,
+        model_input = {"input": {"b64": chip_base64}}
+        output = endpoint_inference(
+            input_b64_img=model_input,
         )
         print("Embedded on model endpoint.")
 
@@ -380,11 +333,9 @@ def embed_new_chip(ibex_chip):
         print("Image loaded from local storage.")
         chip_base64 = base64.b64encode(chip_image).decode("utf-8")
         # Prepare the instance dictionary to match the model's expected input schema
-        model_input = {"bytes_inputs": {"b64": chip_base64}}
-        output = predict_custom_trained_model(
-            project="744617398606",
-            endpoint_id="8459945929317810176",
-            instances=model_input,
+        model_input = {"input": {"b64": chip_base64}}
+        output = endpoint_inference(
+            input_b64_img=model_input,
         )
         print("Embedded on model endpoint.")
 

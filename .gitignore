@@ -3,13 +3,14 @@
 .dockerignore
 Dockerfile
 fly.toml
+debug.ipynb
 
 webibex.code-workspace
 node/
 static/
 # core/embedding_model/
 prod/
-.venv_prod/
+.prod_env/
 .venv_dev/
 gcp_service_account_credentials.json
 
