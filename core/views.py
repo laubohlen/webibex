@@ -391,7 +391,7 @@ def chip_view(request, oid):
         chip_url = ibex_chip.file.url
 
     # Call the custom method to process and embed the chip
-    # utils.embed_new_chip(ibex_chip)
+    utils.embed_new_chip(ibex_chip)
 
     # eye_x_scaled, eye_y_scaled = scale_coordinate(
     #     eye_landmark.x_coordinate,
