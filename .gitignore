@@ -6,7 +6,7 @@ fly.toml
 debug.ipynb
 
 webibex.code-workspace
-node/
+node/node_modules
 static/
 # core/embedding_model/
 prod/
