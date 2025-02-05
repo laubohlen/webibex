@@ -7,7 +7,8 @@ debug.ipynb
 
 webibex.code-workspace
 node/node_modules
-static/
+static/css/style.css
+static/css/style.min.css
 # core/embedding_model/
 prod/
 .prod_env/
