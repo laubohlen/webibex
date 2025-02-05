@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+
 from filer.models.abstract import BaseImage as FilerBaseImage
 
 from collections import OrderedDict
@@ -21,6 +22,11 @@ class Animal(models.Model):
         return self.id_code
 
 
+class Location(models.Model):
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+
+
 class IbexImage(FilerBaseImage):
     SIDE_CHOICES = OrderedDict(
         [
@@ -31,6 +37,9 @@ class IbexImage(FilerBaseImage):
     )
     animal = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, blank=True)
     side = models.CharField(max_length=1, choices=SIDE_CHOICES, null=True, blank=True)
+    location = models.ForeignKey(
+        Location, on_delete=models.SET_NULL, null=True, blank=True
+    )
 
     class Meta(FilerBaseImage.Meta):
         # You must define a meta with en explicit app_label
@@ -55,3 +64,12 @@ class Embedding(models.Model):
     )
     embedding = models.JSONField(null=True, blank=True)  # store as array.tolist()
     time_date = models.DateTimeField(auto_now=True)
+
+
+class CircularRegion(models.Model):
+    name = models.CharField(max_length=50, null=True, blank=True)
+    origin_latitude = models.FloatField(null=True, blank=True)
+    origin_longitude = models.FloatField(null=True, blank=True)
+    radius = models.IntegerField(
+        default=2000, null=True, blank=True
+    )  # radius in meters
