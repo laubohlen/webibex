@@ -78,9 +78,9 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
             image.side = "R"
         elif image.folder.name == "_other_upload":
             image.side = "O"
-        
+
         image.save()
-    
+
     else:
         pass
 
@@ -144,11 +144,18 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
                 name=user_main_folder_name, owner=user
             ).first()
 
-            animal_folder, _ = Folder.objects.get_or_create(name=animal_id, owner=user, parent=user_main_foler)
-            left_folder, _ = Folder.objects.get_or_create(name=f"left_{animal_id}", owner=user, parent=animal_folder)
-            right_folder, _ = Folder.objects.get_or_create(name=f"right_{animal_id}", owner=user, parent=animal_folder)
-            other_folder, _ = Folder.objects.get_or_create(name=f"other_{animal_id}", owner=user, parent=animal_folder)
-
+            animal_folder, _ = Folder.objects.get_or_create(
+                name=animal_id, owner=user, parent=user_main_foler
+            )
+            left_folder, _ = Folder.objects.get_or_create(
+                name=f"left_{animal_id}", owner=user, parent=animal_folder
+            )
+            right_folder, _ = Folder.objects.get_or_create(
+                name=f"right_{animal_id}", owner=user, parent=animal_folder
+            )
+            other_folder, _ = Folder.objects.get_or_create(
+                name=f"other_{animal_id}", owner=user, parent=animal_folder
+            )
 
             # Determine which subfolder the image should go to
             if instance.side == "L":
@@ -166,9 +173,11 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
             # create new filename
             old_filename = instance.name
             parts = old_filename.split("_")
-            if len(parts) >= 3: # old_name = "PNGP_---_yy_mm_dd_HHMMSS.ext" or "PNGP_---_noexif.ext"
+            if (
+                len(parts) >= 3
+            ):  # old_name = "PNGP_---_yy_mm_dd_HHMMSS.ext" or "PNGP_---_noexif.ext"
                 new_filename = f"{animal_id}_{"_".join(parts[2:])}"
-            else: # old_name = "V01O_noexif.ext"
+            else:  # old_name = "V01O_noexif.ext"
                 new_filename = f"{animal_id}_{parts[1]}"
 
             # rename and finally save all changes
