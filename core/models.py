@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 from filer.models.abstract import BaseImage as FilerBaseImage
 
@@ -66,10 +68,26 @@ class Embedding(models.Model):
     time_date = models.DateTimeField(auto_now=True)
 
 
-class CircularRegion(models.Model):
+class Region(models.Model):
     name = models.CharField(max_length=50, null=True, blank=True)
     origin_latitude = models.FloatField(null=True, blank=True)
     origin_longitude = models.FloatField(null=True, blank=True)
     radius = models.IntegerField(
         default=2000, null=True, blank=True
     )  # radius in meters
+    owner = models.ForeignKey(
+        getattr(settings, "AUTH_USER_MODEL", "auth.User"),
+        related_name="owned_%(class)ss",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("owner"),
+    )
+
+    # force unique region names per user
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "name"], name="unique_region_name_per_owner"
+            )
+        ]
