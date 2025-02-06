@@ -9,7 +9,7 @@ from filer import settings as filer_settings
 from filer.models import Folder
 from filer.utils.loader import load_model
 
-from .models import User, Animal
+from .models import User, Animal, Region
 from simple_landmarks.models import LandmarkItem
 
 
@@ -29,6 +29,11 @@ class LandmarkInline(GenericTabularInline):
 class AnimalAdmin(admin.ModelAdmin):
     list_display = ["__str__", "id_code", "name", "cohort"]
     search_fields = ["id_code__istartswith"]
+
+
+@admin.register(Region)
+class RegionAdmin(admin.ModelAdmin):
+    list_display = ["name"]
 
 
 Image = load_model(filer_settings.FILER_IMAGE_MODEL)
