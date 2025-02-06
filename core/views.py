@@ -7,15 +7,15 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.aggregates import Count
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 from django.core.files.base import ContentFile
 
 from pathlib import Path
 from io import BytesIO
 from PIL import Image
-from core.models import IbexImage, IbexChip, Animal, Embedding
+from core.models import IbexImage, IbexChip, Animal, Embedding, Region, Location
 from simple_landmarks.models import LandmarkItem, Landmark
 from . import utils, b2_utils
 
@@ -483,7 +483,7 @@ def rerun_view(request, oid):
     # The distinct() call ensures that each Animal is only returned once, even if they have multiple images.
     animals_with_images = Animal.objects.filter(ibeximage__isnull=False).distinct()
     # Step 2: Query IbexChips related to those animals via the IbexImage model
-    # exclude the query chip that has already been run
+    # and exclude the query chip that has already been run
     gallery_chips = IbexChip.objects.filter(
         ibex_image__animal__in=animals_with_images
     ).exclude(pk=oid)
@@ -558,12 +558,92 @@ def created_animal_view(request, oid):
     )
 
 
+def save_region(request):
+    if request.method == "POST":
+        region_name = request.POST.get("region-name")
+        radius = request.POST.get("radius")
+        latitude = request.POST.get("latitude")
+        longitude = request.POST.get("longitude")
+        region_id = request.POST.get("region-id")  # Will be present if updating
+
+        # If a region id is present, update the existing region.
+        if region_id:
+            region = get_object_or_404(Region, pk=region_id, owner=request.user)
+
+            # Optionally, if the name is being changed, you can check for duplicates.
+            if (
+                region.name != region_name
+                and Region.objects.filter(
+                    owner=request.user, name__iexact=region_name
+                ).exists()
+            ):
+                print("Region name already exists")
+                return render(
+                    request,
+                    "core/region_create_naming_error.html",
+                    {"name_taken": region_name, "radius": radius},
+                )
+
+            # Update the region.
+            region.name = region_name
+            region.radius = radius
+            region.origin_latitude = latitude
+            region.origin_longitude = longitude
+            region.save()
+
+            return render(request, "core/region_read.html", {"region": region})
+
+        else:  # Otherwise, we're creating a new region.
+            # check if region name already exists
+            if Region.objects.filter(
+                owner=request.user, name__iexact=region_name
+            ).exists():
+                print("Region name already exists")
+                return render(
+                    request,
+                    "core/region_create_naming_error.html",
+                    {"name_taken": region_name, "radius": radius},
+                )
+
+        # Create the new region.
+        Region.objects.create(
+            name=region_name,
+            radius=radius,
+            origin_latitude=latitude,
+            origin_longitude=longitude,
+            owner=request.user,
+        )
+        return redirect("region-overview")
+    # For GET requests, simply return to overview
+    return render(request, "core/region_overview.html")
+
+
+def create_region(request):
+    return render(request, "core/region_create.html")
+
+
+def read_region(request, oid):
+    region = get_object_or_404(Region, pk=oid)
+    return render(request, "core/region_read.html", {"region": region})
+
+
+def delete_region(request, oid):
+    region = get_object_or_404(Region, pk=oid, owner=request.user)
+    if request.method == "POST":
+        region.delete()
+        return redirect("region-overview")
+    return render(request, "core/region_delete.html", {"region": region})
+
+
+def update_region(request, oid):
+    region = get_object_or_404(Region, pk=oid)
+    return render(request, "core/region_update.html", {"region": region})
+
+
+def region_overview(request):
+    region_qs = Region.objects.filter(owner=request.user)
+    return render(request, "core/region_overview.html", {"region_qs": region_qs})
+
+
 def test_view(request):
-    from environ import Env
-
-    env = Env()
-    Env.read_env()
-    ENVIRONMENT = env("ENVIRONMENT", default="production")
-
-    # If not a POST request, just render the form
-    return render(request, "test.html")
+    return render(request, "core/test.html")
