@@ -54,6 +54,12 @@ urlpatterns = [
         saved_animal_selection_view,
         name="saved-animal-selection",
     ),
+    path("create-region/", create_region, name="create-region"),
+    path("save-region/", save_region, name="save-region"),
+    re_path(r"^read-region/(?P<oid>[0-9]+)/$", read_region, name="read-region"),
+    re_path(r"^delete-region/(?P<oid>[0-9]+)/$", delete_region, name="delete-region"),
+    re_path(r"^update-region/(?P<oid>[0-9]+)/$", update_region, name="update-region"),
+    path("region-overview/", region_overview, name="region-overview"),
 ]
 
 if settings.DEBUG:
