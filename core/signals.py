@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from allauth.account.signals import user_signed_up
 
-from .models import IbexImage, IbexChip
+from .models import IbexImage, IbexChip, Location
 from simple_landmarks.models import LandmarkItem, Landmark
 from filer.models import Folder
 
@@ -48,6 +48,82 @@ def create_user_folders(sender, instance, created, **kwargs):
             Folder.objects.create(name="_other_upload", owner=user, parent=main_folder)
 
 
+from PIL import Image, ExifTags
+
+
+def get_decimal_from_dms(dms, ref):
+    """
+    Convert degrees, minutes, seconds to decimal degrees.
+
+    dms: tuple of three values representing degrees, minutes, seconds.
+         Each value can be either a float or a tuple (numerator, denominator).
+    ref: 'N', 'S', 'E', or 'W'. South and West are negative.
+    """
+
+    def to_float(value):
+        # If the value is a tuple (num, den), perform the division.
+        if isinstance(value, tuple):
+            try:
+                return value[0] / value[1]
+            except Exception as e:
+                print("Error converting tuple to float:", e)
+                return 0.0
+        # Otherwise, try to convert directly to float.
+        try:
+            return float(value)
+        except Exception as e:
+            print("Error converting value to float:", e)
+            return 0.0
+
+    try:
+        degrees = to_float(dms[0])
+        minutes = to_float(dms[1])
+        seconds = to_float(dms[2])
+    except Exception as e:
+        print("Decimal conversion error:", e)
+        return 0.0  # Return 0.0 if any error occurs in conversion
+
+    decimal = degrees + (minutes / 60.0) + (seconds / 3600.0)
+    if ref.upper() in ["S", "W"]:
+        decimal = -decimal
+    return decimal
+
+
+def extract_gps_coords(filer_image):
+    # get EXIF data
+    exif = filer_image.exif
+
+    # Get the GPSInfo data; if missing, return (0, 0)
+    gps_info = exif.get("GPSInfo")
+    print("gps info:", gps_info)
+    if not gps_info:
+        print("No GPS information in EXIF data.")
+        return 0.0, 0.0
+
+    # Decode the GPSInfo keys to human-readable form.
+    gps_data = {}
+    for key in gps_info.keys():
+        decoded_key = ExifTags.GPSTAGS.get(key, key)
+        gps_data[decoded_key] = gps_info[key]
+
+    # Check that all necessary fields are present.
+    required_keys = ["GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef"]
+    if not all(key in gps_data for key in required_keys):
+        print("Missing GPS entries in EXIF data.")
+        return 0.0, 0.0
+
+    try:
+        lat = get_decimal_from_dms(gps_data["GPSLatitude"], gps_data["GPSLatitudeRef"])
+        lng = get_decimal_from_dms(
+            gps_data["GPSLongitude"], gps_data["GPSLongitudeRef"]
+        )
+    except Exception:
+        # In case something goes wrong during conversion
+        return 0.0, 0.0
+
+    return lat, lng
+
+
 @receiver(post_save, sender=IbexImage)
 def rename_uploaded_image(sender, instance, created, **kwargs):
     image = instance
@@ -79,6 +155,26 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
         elif image.folder.name == "_other_upload":
             image.side = "O"
 
+        image.save()
+
+        # extract location from exif if available
+        if image.exif:  # no exif results in empty dictionary which bool(dict) == False
+            latitude, longitude = extract_gps_coords(image)
+        else:
+            latitude, longitude = 0.0, 0.0
+
+        print(latitude, longitude)
+
+        # Create a new Location instance if one doesn't exist
+        if image.location is None:
+            location = Location.objects.create(latitude=latitude, longitude=longitude)
+            image.location = location
+        else:
+            # Otherwise, update the existing location.
+            image.location.latitude = latitude
+            image.location.longitude = longitude
+
+        # Save the image to update the relationship, if needed
         image.save()
 
     else:
