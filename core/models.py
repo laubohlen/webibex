@@ -28,6 +28,12 @@ class Location(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
 
+    def __str__(self):
+        # Use hasattr to check if there's an associated IbexImage.
+        if hasattr(self, "ibeximage") and self.ibeximage:
+            return f"Location for: {self.ibeximage.name}"
+        return "Location for: [No IbexImage]"
+
 
 class IbexImage(FilerBaseImage):
     SIDE_CHOICES = OrderedDict(
@@ -39,7 +45,7 @@ class IbexImage(FilerBaseImage):
     )
     animal = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, blank=True)
     side = models.CharField(max_length=1, choices=SIDE_CHOICES, null=True, blank=True)
-    location = models.ForeignKey(
+    location = models.OneToOneField(
         Location, on_delete=models.SET_NULL, null=True, blank=True
     )
 
