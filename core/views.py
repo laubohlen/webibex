@@ -558,6 +558,7 @@ def created_animal_view(request, oid):
     )
 
 
+@login_required
 def save_region(request):
     if request.method == "POST":
         region_name = request.POST.get("region-name")
@@ -618,15 +619,18 @@ def save_region(request):
     return render(request, "core/region_overview.html")
 
 
+@login_required
 def create_region(request):
     return render(request, "core/region_create.html")
 
 
+@login_required
 def read_region(request, oid):
     region = get_object_or_404(Region, pk=oid)
     return render(request, "core/region_read.html", {"region": region})
 
 
+@login_required
 def delete_region(request, oid):
     region = get_object_or_404(Region, pk=oid, owner=request.user)
     if request.method == "POST":
@@ -635,15 +639,18 @@ def delete_region(request, oid):
     return render(request, "core/region_delete.html", {"region": region})
 
 
+@login_required
 def update_region(request, oid):
     region = get_object_or_404(Region, pk=oid)
     return render(request, "core/region_update.html", {"region": region})
 
 
+@login_required
 def region_overview(request):
     region_qs = Region.objects.filter(owner=request.user)
     return render(request, "core/region_overview.html", {"region_qs": region_qs})
 
 
+@login_required
 def test_view(request):
     return render(request, "core/test.html")
