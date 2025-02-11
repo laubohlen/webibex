@@ -67,13 +67,13 @@ def get_decimal_from_dms(dms, ref):
                 return value[0] / value[1]
             except Exception as e:
                 print("Error converting tuple to float:", e)
-                return 0.0
+                return None
         # Otherwise, try to convert directly to float.
         try:
             return float(value)
         except Exception as e:
             print("Error converting value to float:", e)
-            return 0.0
+            return None
 
     try:
         degrees = to_float(dms[0])
@@ -81,7 +81,7 @@ def get_decimal_from_dms(dms, ref):
         seconds = to_float(dms[2])
     except Exception as e:
         print("Decimal conversion error:", e)
-        return 0.0  # Return 0.0 if any error occurs in conversion
+        return None  # Return 0.0 if any error occurs in conversion
 
     decimal = degrees + (minutes / 60.0) + (seconds / 3600.0)
     if ref.upper() in ["S", "W"]:
@@ -93,12 +93,12 @@ def extract_gps_coords(filer_image):
     # get EXIF data
     exif = filer_image.exif
 
-    # Get the GPSInfo data; if missing, return (0, 0)
+    # Get the GPSInfo data; if missing, return (None, None)
     gps_info = exif.get("GPSInfo")
     print("gps info:", gps_info)
     if not gps_info:
         print("No GPS information in EXIF data.")
-        return 0.0, 0.0
+        return None, None
 
     # Decode the GPSInfo keys to human-readable form.
     gps_data = {}
@@ -110,7 +110,7 @@ def extract_gps_coords(filer_image):
     required_keys = ["GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef"]
     if not all(key in gps_data for key in required_keys):
         print("Missing GPS entries in EXIF data.")
-        return 0.0, 0.0
+        return None, None
 
     try:
         lat = get_decimal_from_dms(gps_data["GPSLatitude"], gps_data["GPSLatitudeRef"])
@@ -119,7 +119,7 @@ def extract_gps_coords(filer_image):
         )
     except Exception:
         # In case something goes wrong during conversion
-        return 0.0, 0.0
+        return None, None
 
     return lat, lng
 
@@ -161,9 +161,7 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
         if image.exif:  # no exif results in empty dictionary which bool(dict) == False
             latitude, longitude = extract_gps_coords(image)
         else:
-            latitude, longitude = 0.0, 0.0
-
-        print(latitude, longitude)
+            latitude, longitude = None, None
 
         # Create a new Location instance if one doesn't exist
         if image.location is None:
