@@ -24,9 +24,50 @@ class Animal(models.Model):
         return self.id_code
 
 
+class Region(models.Model):
+    name = models.CharField(max_length=50, null=True, blank=True)
+    origin_latitude = models.FloatField(null=True, blank=True)
+    origin_longitude = models.FloatField(null=True, blank=True)
+    radius = models.IntegerField(
+        default=2000, null=True, blank=True
+    )  # radius in meters
+    owner = models.ForeignKey(
+        getattr(settings, "AUTH_USER_MODEL", "auth.User"),
+        related_name="owned_%(class)ss",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("owner"),
+    )
+
+    # force unique region names per user
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "name"], name="unique_region_name_per_owner"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Location(models.Model):
+    SOURCE_CHOICES = OrderedDict(
+        [
+            ("gps", "location from camera GPS"),
+            ("marker", "location marker set manually"),
+            ("region", "location somewhere within this region"),
+        ]
+    )
+    source = models.CharField(
+        max_length=6, choices=SOURCE_CHOICES, null=True, blank=True
+    )
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    exif_latitude = models.FloatField(null=True, blank=True)
+    exif_longitude = models.FloatField(null=True, blank=True)
+    region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         # Use hasattr to check if there's an associated IbexImage.
@@ -72,28 +113,3 @@ class Embedding(models.Model):
     )
     embedding = models.JSONField(null=True, blank=True)  # store as array.tolist()
     time_date = models.DateTimeField(auto_now=True)
-
-
-class Region(models.Model):
-    name = models.CharField(max_length=50, null=True, blank=True)
-    origin_latitude = models.FloatField(null=True, blank=True)
-    origin_longitude = models.FloatField(null=True, blank=True)
-    radius = models.IntegerField(
-        default=2000, null=True, blank=True
-    )  # radius in meters
-    owner = models.ForeignKey(
-        getattr(settings, "AUTH_USER_MODEL", "auth.User"),
-        related_name="owned_%(class)ss",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        verbose_name=_("owner"),
-    )
-
-    # force unique region names per user
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["owner", "name"], name="unique_region_name_per_owner"
-            )
-        ]
