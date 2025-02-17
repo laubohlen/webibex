@@ -60,6 +60,12 @@ urlpatterns = [
     re_path(r"^delete-region/(?P<oid>[0-9]+)/$", delete_region, name="delete-region"),
     re_path(r"^update-region/(?P<oid>[0-9]+)/$", update_region, name="update-region"),
     path("region-overview/", region_overview, name="region-overview"),
+    re_path(
+        r"^set-image-location/(?P<oid>[0-9]+)/$",
+        set_image_location,
+        name="set-image-location",
+    ),
+    path("save-image-location/", save_image_location, name="save-image-location"),
 ]
 
 if settings.DEBUG:
