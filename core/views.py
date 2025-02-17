@@ -651,6 +651,51 @@ def region_overview(request):
     return render(request, "core/region_overview.html", {"region_qs": region_qs})
 
 
+def save_image_location(request):
+    if request.method == "POST":
+        region_id = request.POST.get("region-id")
+        latitude = request.POST.get("latitude")
+        longitude = request.POST.get("longitude")
+        location_id = request.POST.get("location-id")
+        location_source = request.POST.get("location-source")
+        image_id = request.POST.get("image-id")
+
+        region = get_object_or_404(Region, pk=region_id)
+        # image = get_object_or_404(IbexImage, pk=image_id)
+
+        # Update location
+        location = get_object_or_404(Location, pk=location_id)
+        location.latitude = latitude
+        location.longitude = longitude
+        location.source = location_source
+        location.region = region
+        location.save()
+        print(f"Location updated.")
+
+        return redirect("landmark-horn", oid=image_id)
+    pass
+
+
+def set_image_location(request, oid):
+    image = get_object_or_404(IbexImage, id=oid)
+    image_location = image.location
+    location_id = image_location.id
+    # check if GPS is available, else return None
+    if None in [image_location.latitude, image_location.longitude]:
+        image_location = None
+    region_qs = Region.objects.filter(owner=request.user)
+    return render(
+        request,
+        "core/set_image_location.html",
+        {
+            "image": image,
+            "image_location": image_location,
+            "location_id": location_id,
+            "regions": region_qs,
+        },
+    )
+
+
 @login_required
 def test_view(request):
     return render(request, "core/test.html")
