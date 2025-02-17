@@ -165,12 +165,18 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
 
         # Create a new Location instance if one doesn't exist
         if image.location is None:
-            location = Location.objects.create(latitude=latitude, longitude=longitude)
+            location = Location.objects.create(
+                latitude=latitude,
+                longitude=longitude,
+                exif_latitude=latitude,
+                exif_longitude=longitude,
+            )
             image.location = location
         else:
             # Otherwise, update the existing location.
             image.location.latitude = latitude
             image.location.longitude = longitude
+        print("Created location object for image")
 
         # Save the image to update the relationship, if needed
         image.save()
@@ -186,10 +192,14 @@ def initialise_landmark_items(sender, instance, created, **kwargs):
         # initialise landmark-items for each landmark for the new image
         content_type = ContentType.objects.get_for_model(IbexImage)
         landmarks = Landmark.objects.all()
-        for lm in landmarks:
-            LandmarkItem.objects.create(
-                content_type=content_type, object_id=image.id, landmark=lm
-            )
+        if landmarks:
+            for lm in landmarks:
+                LandmarkItem.objects.create(
+                    content_type=content_type, object_id=image.id, landmark=lm
+                )
+            print("Created landmarkitem objects for image")
+        else:
+            print("No Landmarks available, please create Landmarks first")
     else:
         pass
 
@@ -202,6 +212,12 @@ def delete_landmark_items(sender, instance, **kwargs):
         content_type=content_type, object_id=image.id
     )
     landmark_items.delete()
+
+
+@receiver(post_delete, sender=IbexImage)
+def delete_associated_location(sender, instance, **kwargs):
+    if instance.location:
+        instance.location.delete()
 
 
 @receiver(post_delete, sender=IbexChip)
