@@ -44,9 +44,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Check if the region name is empty
         if (regionName === "") {
-            alert("Region name is required!"); // Notify the user
+            // Show error message in red text on the page
+            document.getElementById("region-name-error").textContent = "Please choose a name for the region.";
             event.preventDefault(); // Stop form submission
             return;
+        } else {
+            // Clear any previous error message if the name is provided
+            document.getElementById("region-name-error").textContent = "";
         }
 
         // Assign values to hidden input fields
