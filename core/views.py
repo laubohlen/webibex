@@ -17,6 +17,7 @@ from io import BytesIO
 from PIL import Image
 from core.models import IbexImage, IbexChip, Animal, Embedding, Region, Location
 from simple_landmarks.models import LandmarkItem, Landmark
+from filer.models import Folder
 from . import utils, b2_utils
 
 
@@ -714,23 +715,44 @@ def images_overview(request):
     )
 
 
-def image_upload(request):
-    return render(request, "core/image_upload.html")
+# def image_upload(request):
+#     return render(request, "core/image_upload.html")
 
 
+@login_required
 def image_read(request, oid):
     image = get_object_or_404(IbexImage, pk=oid)
     return render(request, "core/image_read.html", {"image": image})
 
 
+@login_required
 def image_update(request, oid):
     image = get_object_or_404(IbexImage, pk=oid)
     return render(request, "core/image_update.html", {"image": image})
 
 
+@login_required
 def image_delete(request, oid):
     image = get_object_or_404(IbexImage, pk=oid)
     return render(request, "core/image_delete.html", {"image": image})
+
+
+@login_required
+def image_upload(request):
+    if request.method == "POST":
+        files = request.FILES.getlist("images")
+        # Retrieve the user's main folder (created by signal)
+        upload_folder = Folder.objects.get(
+            name=f"{request.user.username}_files", owner=request.user
+        )
+
+        for f in files:
+            IbexImage.objects.create(
+                original_filename=f.name, file=f, folder=upload_folder
+            )
+
+        return redirect("images-overview")  # Redirect back
+    return render(request, "core/image_upload.html")
 
 
 @login_required
