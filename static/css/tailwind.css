@@ -177,3 +177,10 @@ input[name="remember"] {
     background-color: #0000ee;
     width: fit-content;
 }
+
+.button:disabled,
+[type="submit"]:disabled,
+[type="button"]:disabled {
+    background-color: #eef1e9 !important; /* Light green (Tailwind's green-200) */
+    cursor: not-allowed;
+}
