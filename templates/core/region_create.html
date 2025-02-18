@@ -1,0 +1,65 @@
+{% extends 'layouts/empty.html' %} {% load static %}{% block content %}
+<div class="max-w-screen-md mx-auto p-4">
+    <div>
+        <label for="region-name">Enter region name:</label>
+        <input
+            type="text"
+            id="region-name"
+            placeholder="Name"
+            class="border p-2 rounded-md focus:ring-2 focus:ring-blue-500"
+        />
+        <p
+            id="region-name-error"
+            class="text-red-500 mt-2"
+        ></p>
+    </div>
+    <div>
+        <label for="radius">Radius in meters from origin:</label>
+        <input
+            type="text"
+            id="radius"
+            class="border p-2 rounded-md focus:ring-2 focus:ring-blue-500"
+        />
+    </div>
+    <label for="map">Select origin:</label>
+    <div
+        id="map"
+        class="p-4"
+        style="height: 500px; width: 736px"
+    ></div>
+
+    <form
+        id="region-form"
+        method="POST"
+        action="{% url 'save-region' %}"
+    >
+        {% csrf_token %}
+        <input
+            type="hidden"
+            name="region-name"
+            id="form-region-name"
+        />
+        <input
+            type="hidden"
+            name="radius"
+            id="form-radius"
+        />
+        <input
+            type="hidden"
+            name="latitude"
+            id="form-latitude"
+        />
+        <input
+            type="hidden"
+            name="longitude"
+            id="form-longitude"
+        />
+
+        <div class="w-full flex justify-end space-x-4 p-4">
+            <a href="{% url 'region-overview' %}"><button class="button !bg-gray-200 !text-black">Cancel</button></a>
+            <button class="button ml-auto">Save</button>
+        </div>
+    </form>
+</div>
+<script src="{% static 'js/region_create.js' %}"></script>
+{% endblock %}

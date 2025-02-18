@@ -1,0 +1,46 @@
+{% extends 'layouts/empty.html' %} {% load static %}{% block content %}
+<div class="max-w-screen-md mx-auto p-4">
+    <div>
+        <label for="region-name">Region name:</label>
+        <p>{{region.name}}</p>
+    </div>
+    <div>
+        <label for="radius">Radius in meters from origin:</label>
+        <p>{{region.radius}}</p>
+    </div>
+    <label for="map">Origin:</label>
+    <div
+        id="map"
+        class="p-4"
+        style="height: 500px; width: 736px"
+    ></div>
+
+    <div class="w-full flex justify-end space-x-4 p-4">
+        <a href="{% url 'delete-region' oid=region.id%}"><button class="button !bg-red-500">Delete</button></a>
+        <a href="{% url 'update-region' oid=region.id%}"><button class="button !bg-gray-200 !text-black">Edit</button></a>
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // get coordinates of origin of region
+        var origin_lat = {{region.origin_latitude|escapejs}};
+        var origin_lng = {{region.origin_longitude|escapejs}};
+        var origin_rad = {{region.radius|escapejs}};
+
+        // initilize leaflet map
+        var map = L.map("map").setView([origin_lat, origin_lng], 14);
+
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(map);
+
+        // display marker and region circle
+        var marker = L.marker([origin_lat, origin_lng]).addTo(map);
+        var circle = L.circle([origin_lat, origin_lng], {
+            fillOpacity: 0.1,
+            radius: origin_rad,
+        }).addTo(map);
+    });
+</script>
+{% endblock %}

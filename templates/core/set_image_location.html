@@ -1,0 +1,301 @@
+{% extends 'layouts/empty.html' %} {% load static %} {% block content %}
+<div class="max-w-screen-md mx-auto p-4">
+    <!-- No GPS available, choose region: -->
+    <div>
+        <label for="region-select">Choose region for image:</label>
+
+        <!-- ropdown menu with regions of user -->
+        <select
+            name="region"
+            id="region-select"
+            required
+            class="border rounded-lg border-gray-300 p-2 focus:border-indigo-500 focus:ring-indigo-500 mb-6"
+        >
+            <!-- Placeholder option forcing the user to choose a region -->
+            <option
+                value=""
+                disabled
+                selected
+            >
+                -- Select a region --
+            </option>
+            {% for region in regions %}
+            <option
+                value="{{ region.id }}"
+                data-lat="{{ region.origin_latitude }}"
+                data-lng="{{ region.origin_longitude }}"
+                data-radius="{{ region.radius }}"
+            >
+                {{ region.name }}
+            </option>
+            {% endfor %}
+        </select>
+        <p
+            id="region-select-error"
+            class="text-red-500 mt-2"
+        ></p>
+    </div>
+
+    {% if image_location %}
+    <!-- No GPS available, select location: -->
+    <label for="map">Confirm image GPS or choose new location:</label>
+    {% else %}
+    <!-- No GPS available, select location: -->
+    <label for="map">Select image location, default is the origin of the region:</label>
+    {% endif %}
+
+    <!-- Map container -->
+    <div
+        id="map"
+        class="p-4"
+        style="height: 500px; width: 736px"
+    ></div>
+
+    <!-- Form to collect region and map values with a JS script -->
+    <form
+        method="post"
+        action="{% url 'save-image-location' %}"
+        id="location-form"
+    >
+        {% csrf_token %}
+        <!-- Hidden fields to be set via JavaScript -->
+        <input
+            type="hidden"
+            name="region-id"
+            id="region-id"
+            value=""
+        />
+        <input
+            type="hidden"
+            name="latitude"
+            id="latitude"
+            value=""
+        />
+        <input
+            type="hidden"
+            name="longitude"
+            id="longitude"
+            value=""
+        />
+        <input
+            type="hidden"
+            name="location-id"
+            id="location-id"
+            value="{{ location_id }}"
+        />
+        <input
+            type="hidden"
+            name="location-source"
+            id="location-source"
+            value=""
+        />
+        <input
+            type="hidden"
+            name="image-id"
+            id="image-id"
+            value="{{ image.id }}"
+        />
+        <div class="w-full flex justify-end space-x-4 p-4">
+            <span
+                id="lat-lng-display"
+                class="text-sm text-gray-600"
+            >
+                Image LatLng[--, --]
+            </span>
+            <!-- ensures that clicking Cancel won’t trigger the form’s submit event and will simply navigate back -->
+            <!-- deletes error message so it isn't visible for a brief moment -->
+            <button
+                class="button !bg-gray-200 !text-black"
+                onclick="window.history.back();"
+            >
+                Cancel
+            </button>
+            <button class="button ml-auto">Save</button>
+        </div>
+    </form>
+
+    <!-- Image with same width as map above -->
+    <div class="mb-6">
+        <img
+            src="{{ image.url }}"
+            alt="Uploaded Image"
+            class="w-[736px] mx-auto"
+        />
+    </div>
+
+    <p>Image name: {{ image.name }}</p>
+    <p>Original filename: {{ image.original_filename }}</p>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // initilize leaflet map at the
+        var map = L.map("map").setView([45.578559, 7.230163], 13);
+
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(map);
+
+        // Instead of immediately creating markers for the region and adding them to the map,
+        // we initialize them as null.
+        var imgLocation = L.marker([]);
+        var gpsMarker = null; // global GPS marker
+        var marker = null;
+        var circle = null;
+        var currentRegionLat = null, currentRegionLng = null;
+
+        function updateLatLngDisplay() {
+            var lat = parseFloat(document.getElementById("latitude").value) || 0;
+            var lng = parseFloat(document.getElementById("longitude").value) || 0;
+            document.getElementById("lat-lng-display").textContent = "Image LatLng[" + lat.toFixed(2) +", "+ lng.toFixed(2) + "]";
+        }
+
+        // When the region dropdown changes, update the marker, circle, and map view.
+        document.getElementById("region-select").addEventListener("change", function (e) {
+            var selectedOption = e.target.options[e.target.selectedIndex];
+
+            // Ensure a valid region is selected (skip if placeholder is still selected)
+            if (!selectedOption.value) return;
+
+            // Retrieve region name from the option text.
+            var regionName = selectedOption.text;
+
+            // Parse the data attributes (fallback to Gran Paradiso if missing)
+            var lat = parseFloat(selectedOption.getAttribute("data-lat")) || 45.578559;
+            var lng = parseFloat(selectedOption.getAttribute("data-lng")) || 7.230163;
+            var radius = parseFloat(selectedOption.getAttribute("data-radius")) || 2000;
+
+            // Update the hidden form field for region-id
+            document.getElementById("region-id").value = selectedOption.value;
+
+            // If the marker doesn't exist yet, create it and add it to the map.
+            if (marker === null) {
+                marker = L.marker([lat, lng]).addTo(map);
+            } else {
+                marker.setLatLng([lat, lng]);
+            }
+
+            // Similarly, create the circle only when needed.
+            if (circle === null) {
+                circle = L.circle([lat, lng], {
+                    fillOpacity: 0.1,
+                    radius: radius,
+                }).addTo(map);
+            } else {
+                circle.setLatLng([lat, lng]);
+                circle.setRadius(radius);
+            }
+
+            // Update the marker and circle positions
+            marker.setLatLng([lat, lng]);
+            circle.setLatLng([lat, lng]);
+            circle.setRadius(radius);
+
+            // Close any existing popup on the marker before binding a new one.
+            if (marker.getPopup()) {
+                marker.closePopup();
+            }
+
+            // Bind and open a popup on the marker displaying the region name
+            marker.bindPopup(regionName, {
+                autoClose: false, // Prevents the popup from closing automatically when another popup is opened.
+                closeOnClick: false // Prevents the popup from closing when you click elsewhere on the map.
+            }).openPopup();
+
+            // Optionally, adjust the map's view to the selected region
+            map.setView([lat, lng], 13);
+
+            // update hidden fields and store the region’s origin coordinates
+            currentRegionLat = lat;
+            currentRegionLng = lng;
+            document.getElementById("latitude").value = lat;
+            document.getElementById("longitude").value = lng;
+            document.getElementById("location-source").value = "region";
+            updateLatLngDisplay();
+        });
+
+        // Initialize the region selection based on image GPS location if available.
+        var regionSelect = document.getElementById("region-select");
+        {% if image_location %}
+            var imageLatLng = L.latLng({{ image_location.latitude }}, {{ image_location.longitude }});
+            for (var i = 0; i < regionSelect.options.length; i++) {
+                var option = regionSelect.options[i];
+                if (!option.value) continue; // Skip placeholder
+                var regionLatLng = L.latLng(
+                    parseFloat(option.getAttribute("data-lat")),
+                    parseFloat(option.getAttribute("data-lng"))
+                );
+                var regionRadius = parseFloat(option.getAttribute("data-radius"));
+                if (imageLatLng.distanceTo(regionLatLng) <= regionRadius) {
+                    regionSelect.selectedIndex = i;
+                    break;
+                }
+            }
+            regionSelect.dispatchEvent(new Event("change"));
+        {% else %}
+            if (regionSelect.options.length > 0) {
+                regionSelect.dispatchEvent(new Event("change"));
+            }
+        {% endif %}
+
+
+        // update the form with map click location data, and move marker to click
+        map.on("click", function (event) {
+            var lat = event.latlng.lat;
+            var lng = event.latlng.lng;
+
+            document.getElementById("latitude").value = lat;
+            document.getElementById("longitude").value = lng;
+            imgLocation.setLatLng([lat, lng]).addTo(map);
+            document.getElementById("location-source").value = "marker";
+            updateLatLngDisplay();
+        });
+
+        // When the manual marker is clicked, remove it and revert to the GPS marker location.
+        imgLocation.on("click", function () {
+            map.removeLayer(imgLocation);
+            if (gpsMarker) {
+                var gpsLatLng = gpsMarker.getLatLng();
+                document.getElementById("latitude").value = gpsLatLng.lat;
+                document.getElementById("longitude").value = gpsLatLng.lng;
+                document.getElementById("location-source").value = "gps";
+            } else { // fall back to origin of selected region
+                document.getElementById("latitude").value = currentRegionLat;
+                document.getElementById("longitude").value = currentRegionLng;
+                document.getElementById("location-source").value = "region";
+            }
+            updateLatLngDisplay();
+        });
+
+        // Optional: Validate the form on submit if region-id is missing.
+        document.getElementById("location-form").addEventListener("submit", function (e) {
+            if (!document.getElementById("region-id").value) {
+                document.getElementById("region-select-error").textContent = "Please choose a region.";
+                e.preventDefault(); // Stop form submission
+                return;
+            } else {
+            // Clear any previous error message if the name is provided
+            document.getElementById("region-name-error").textContent = "";
+            }
+        });
+
+        // If image GPS location is available, initialize a marker at that location,
+        // update the map view, and bind a popup to indicate it's the GPS from the image.
+        {% if image_location %}
+        var imageLat = {{ image_location.latitude|escapejs }};
+        var imageLng = {{ image_location.longitude|escapejs }};
+        gpsMarker = L.marker([imageLat, imageLng]).addTo(map);
+        gpsMarker.bindPopup("image", {
+            autoClose: false,
+            closeOnClick: false
+        }).openPopup();
+        map.setView([imageLat, imageLng], 13);
+        document.getElementById("latitude").value = imageLat;
+        document.getElementById("longitude").value = imageLng;
+        document.getElementById("location-source").value = "gps";
+        updateLatLngDisplay();
+        {% endif %}
+    });
+</script>
+{% endblock %}

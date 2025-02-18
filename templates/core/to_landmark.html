@@ -4,19 +4,24 @@
         <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
             <tr>
                 <th>file_name</th>
+                <th>location</th>
                 <th>side</th>
                 <th>chip</th>
                 <th>action</th>
-                <th>id</th>
             </tr>
         </thead>
         <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
             {% for i in images %}
             <tr>
                 {% if i.side %}
-                <td><a href="{% url 'landmark-horn' oid=i.id %}">{{i.name}}</a></td>
+                <!-- <td><a href="{% url 'landmark-horn' oid=i.id %}">{{i.name}}</a></td> -->
+                <td><a href="{% url 'set-image-location' oid=i.id %}">{{i.name}}</a></td>
                 {% else %}
                 <td>{{i.name}}</td>
+                {% endif %} {% if i.location.latitude %}
+                <td><a href="{% url 'set-image-location' oid=i.id %}">location</a></td>
+                {% else %}
+                <td>-</td>
                 {% endif %}
                 <td>{{i.side}}</td>
                 {% if i.ibexchip.ibex_image_id %}
@@ -25,7 +30,7 @@
                     <a
                         href="{% url 'result' oid=i.ibexchip.id %}"
                         class="button"
-                        >run</a
+                        >id</a
                     >
                     <!-- <a
                         href=""
@@ -37,7 +42,6 @@
                 <td>-</td>
                 <td>-</td>
                 {% endif %}
-                <td>-</td>
             </tr>
             {% endfor %}
         </tbody>

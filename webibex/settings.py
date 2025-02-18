@@ -15,6 +15,7 @@ import dj_database_url
 from pathlib import Path
 from environ import Env
 
+
 # environment setup
 env = Env()
 Env.read_env()
@@ -84,6 +85,11 @@ MIDDLEWARE = [
     "core.middleware.RedirectToUserFolderMiddleware",
 ]
 
+# disable browser caching
+if DEBUG == True:
+    MIDDLEWARE += ["django.middleware.cache.FetchFromCacheMiddleware"]
+    CACHE_MIDDLEWARE_SECONDS = 0
+
 ROOT_URLCONF = "webibex.urls"
 
 TEMPLATES = [
@@ -108,13 +114,20 @@ WSGI_APPLICATION = "webibex.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.mysql",
+#         "NAME": "webibex",
+#         "HOST": "localhost",
+#         "USER": "root",
+#         "PASSWORD": os.getenv("MYSQL_ROOT_PASSWORD"),
+#     }
+# }
+
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "NAME": "webibex",
-        "HOST": "localhost",
-        "USER": "root",
-        "PASSWORD": os.getenv("MYSQL_ROOT_PASSWORD"),
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
 

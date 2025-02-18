@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from allauth.account.signals import user_signed_up
 
-from .models import IbexImage, IbexChip
+from .models import IbexImage, IbexChip, Location
 from simple_landmarks.models import LandmarkItem, Landmark
 from filer.models import Folder
 
@@ -48,6 +48,82 @@ def create_user_folders(sender, instance, created, **kwargs):
             Folder.objects.create(name="_other_upload", owner=user, parent=main_folder)
 
 
+from PIL import Image, ExifTags
+
+
+def get_decimal_from_dms(dms, ref):
+    """
+    Convert degrees, minutes, seconds to decimal degrees.
+
+    dms: tuple of three values representing degrees, minutes, seconds.
+         Each value can be either a float or a tuple (numerator, denominator).
+    ref: 'N', 'S', 'E', or 'W'. South and West are negative.
+    """
+
+    def to_float(value):
+        # If the value is a tuple (num, den), perform the division.
+        if isinstance(value, tuple):
+            try:
+                return value[0] / value[1]
+            except Exception as e:
+                print("Error converting tuple to float:", e)
+                return None
+        # Otherwise, try to convert directly to float.
+        try:
+            return float(value)
+        except Exception as e:
+            print("Error converting value to float:", e)
+            return None
+
+    try:
+        degrees = to_float(dms[0])
+        minutes = to_float(dms[1])
+        seconds = to_float(dms[2])
+    except Exception as e:
+        print("Decimal conversion error:", e)
+        return None  # Return 0.0 if any error occurs in conversion
+
+    decimal = degrees + (minutes / 60.0) + (seconds / 3600.0)
+    if ref.upper() in ["S", "W"]:
+        decimal = -decimal
+    return decimal
+
+
+def extract_gps_coords(filer_image):
+    # get EXIF data
+    exif = filer_image.exif
+
+    # Get the GPSInfo data; if missing, return (None, None)
+    gps_info = exif.get("GPSInfo")
+    print("gps info:", gps_info)
+    if not gps_info:
+        print("No GPS information in EXIF data.")
+        return None, None
+
+    # Decode the GPSInfo keys to human-readable form.
+    gps_data = {}
+    for key in gps_info.keys():
+        decoded_key = ExifTags.GPSTAGS.get(key, key)
+        gps_data[decoded_key] = gps_info[key]
+
+    # Check that all necessary fields are present.
+    required_keys = ["GPSLatitude", "GPSLatitudeRef", "GPSLongitude", "GPSLongitudeRef"]
+    if not all(key in gps_data for key in required_keys):
+        print("Missing GPS entries in EXIF data.")
+        return None, None
+
+    try:
+        lat = get_decimal_from_dms(gps_data["GPSLatitude"], gps_data["GPSLatitudeRef"])
+        lng = get_decimal_from_dms(
+            gps_data["GPSLongitude"], gps_data["GPSLongitudeRef"]
+        )
+    except Exception:
+        # In case something goes wrong during conversion
+        return None, None
+
+    return lat, lng
+
+
 @receiver(post_save, sender=IbexImage)
 def rename_uploaded_image(sender, instance, created, **kwargs):
     image = instance
@@ -78,9 +154,33 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
             image.side = "R"
         elif image.folder.name == "_other_upload":
             image.side = "O"
-        
+
         image.save()
-    
+
+        # extract location from exif if available
+        if image.exif:  # no exif results in empty dictionary which bool(dict) == False
+            latitude, longitude = extract_gps_coords(image)
+        else:
+            latitude, longitude = None, None
+
+        # Create a new Location instance if one doesn't exist
+        if image.location is None:
+            location = Location.objects.create(
+                latitude=latitude,
+                longitude=longitude,
+                exif_latitude=latitude,
+                exif_longitude=longitude,
+            )
+            image.location = location
+        else:
+            # Otherwise, update the existing location.
+            image.location.latitude = latitude
+            image.location.longitude = longitude
+        print("Created location object for image")
+
+        # Save the image to update the relationship, if needed
+        image.save()
+
     else:
         pass
 
@@ -92,10 +192,14 @@ def initialise_landmark_items(sender, instance, created, **kwargs):
         # initialise landmark-items for each landmark for the new image
         content_type = ContentType.objects.get_for_model(IbexImage)
         landmarks = Landmark.objects.all()
-        for lm in landmarks:
-            LandmarkItem.objects.create(
-                content_type=content_type, object_id=image.id, landmark=lm
-            )
+        if landmarks:
+            for lm in landmarks:
+                LandmarkItem.objects.create(
+                    content_type=content_type, object_id=image.id, landmark=lm
+                )
+            print("Created landmarkitem objects for image")
+        else:
+            print("No Landmarks available, please create Landmarks first")
     else:
         pass
 
@@ -108,6 +212,12 @@ def delete_landmark_items(sender, instance, **kwargs):
         content_type=content_type, object_id=image.id
     )
     landmark_items.delete()
+
+
+@receiver(post_delete, sender=IbexImage)
+def delete_associated_location(sender, instance, **kwargs):
+    if instance.location:
+        instance.location.delete()
 
 
 @receiver(post_delete, sender=IbexChip)
@@ -144,11 +254,18 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
                 name=user_main_folder_name, owner=user
             ).first()
 
-            animal_folder, _ = Folder.objects.get_or_create(name=animal_id, owner=user, parent=user_main_foler)
-            left_folder, _ = Folder.objects.get_or_create(name=f"left_{animal_id}", owner=user, parent=animal_folder)
-            right_folder, _ = Folder.objects.get_or_create(name=f"right_{animal_id}", owner=user, parent=animal_folder)
-            other_folder, _ = Folder.objects.get_or_create(name=f"other_{animal_id}", owner=user, parent=animal_folder)
-
+            animal_folder, _ = Folder.objects.get_or_create(
+                name=animal_id, owner=user, parent=user_main_foler
+            )
+            left_folder, _ = Folder.objects.get_or_create(
+                name=f"left_{animal_id}", owner=user, parent=animal_folder
+            )
+            right_folder, _ = Folder.objects.get_or_create(
+                name=f"right_{animal_id}", owner=user, parent=animal_folder
+            )
+            other_folder, _ = Folder.objects.get_or_create(
+                name=f"other_{animal_id}", owner=user, parent=animal_folder
+            )
 
             # Determine which subfolder the image should go to
             if instance.side == "L":
@@ -166,9 +283,11 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
             # create new filename
             old_filename = instance.name
             parts = old_filename.split("_")
-            if len(parts) >= 3: # old_name = "PNGP_---_yy_mm_dd_HHMMSS.ext" or "PNGP_---_noexif.ext"
+            if (
+                len(parts) >= 3
+            ):  # old_name = "PNGP_---_yy_mm_dd_HHMMSS.ext" or "PNGP_---_noexif.ext"
                 new_filename = f"{animal_id}_{"_".join(parts[2:])}"
-            else: # old_name = "V01O_noexif.ext"
+            else:  # old_name = "V01O_noexif.ext"
                 new_filename = f"{animal_id}_{parts[1]}"
 
             # rename and finally save all changes

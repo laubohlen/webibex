@@ -33,7 +33,7 @@ _tf = None
 def get_tf():
     global _tf
     if _tf is None:
-        import tensorflow as tf
+        import tensorflow as tf  # type: ignore (supress VSCode warning)
 
         print(tf.__version__)
         _tf = tf
