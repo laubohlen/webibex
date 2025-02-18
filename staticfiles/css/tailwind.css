@@ -117,6 +117,7 @@ li {
 button {
     font-family: "IBM Plex Mono";
     font-style: normal;
+    border-radius: 0.375rem /* 6px */;
 }
 form p {
     display: flex;
@@ -154,7 +155,6 @@ input[name="remember"] {
     width: auto;
 }
 .button,
-/* button, */
 [type="submit"],
 [type="button"] {
     font-family: "IBM Plex Mono";
