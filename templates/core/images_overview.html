@@ -1,0 +1,33 @@
+{% extends 'layouts/empty.html' %} {% block content %}
+<div class="flex items-center justify-center gap-6 pt-10">
+    <a href="{% url 'image-upload' %}">Upload</a>
+</div>
+<div class="mx-auto mt-4 flex items-center justify-center md:max-w-6xl">
+    <table class="table-auto">
+        <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
+            <tr>
+                <th>id_code</th>
+                <th>name</th>
+                <th>capture date</th>
+                <th>images</th>
+            </tr>
+        </thead>
+        <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
+            <tr>
+                <td><a href="{% url 'unidentified-images'%}">unidentified</a></td>
+                <td></td>
+                <td></td>
+                <td>{{no_id_count}}</td>
+            </tr>
+            {% for i in animals %}
+            <tr>
+                <td><a href="{% url 'animal' oid=i.id %}">{{i.id_code}}</a></td>
+                <td>{{i.name}}</td>
+                <td>{{i.capture_date}}</td>
+                <td>{{i.ibeximage_set.count}}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

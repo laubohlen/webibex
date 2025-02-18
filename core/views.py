@@ -696,6 +696,43 @@ def set_image_location(request, oid):
     )
 
 
+def images_overview(request):
+    # get all animals that are linked to one or more images
+    animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
+        image_count__gt=0
+    )
+    # get all images that are not linked to any animal
+    nr_unidentified_images = len(IbexImage.objects.filter(animal_id__isnull=True))
+
+    return render(
+        request,
+        "core/images_overview.html",
+        {
+            "animals": animals,
+            "no_id_count": nr_unidentified_images,
+        },
+    )
+
+
+def image_upload(request):
+    return render(request, "core/image_upload.html")
+
+
+def image_read(request, oid):
+    image = get_object_or_404(IbexImage, pk=oid)
+    return render(request, "core/image_read.html", {"image": image})
+
+
+def image_update(request, oid):
+    image = get_object_or_404(IbexImage, pk=oid)
+    return render(request, "core/image_update.html", {"image": image})
+
+
+def image_delete(request, oid):
+    image = get_object_or_404(IbexImage, pk=oid)
+    return render(request, "core/image_delete.html", {"image": image})
+
+
 @login_required
 def test_view(request):
     return render(request, "core/test.html")

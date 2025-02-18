@@ -1,0 +1,69 @@
+{% extends 'layouts/empty.html' %} {% load static %} {% block content %}
+<div class="max-w-screen-md mx-auto p-4">
+    <!-- Image information -->
+    <div class="mb-4 space-y-2">
+        <div>
+            <label
+                class="font-bold"
+                for="file-name"
+                >File Name:</label
+            >
+            <p>{{ image.name }}</p>
+        </div>
+        <div>
+            <label
+                class="font-bold"
+                for="original-file-name"
+                >Original File Name:</label
+            >
+            <p>{{ image.original_filename }}</p>
+        </div>
+        <div>
+            <label
+                class="font-bold"
+                for="horn-side"
+                >Horn Side:</label
+            >
+            <p>{{ image.side }}</p>
+        </div>
+    </div>
+
+    <!-- Display the image -->
+    <div class="mb-4 flex justify-center">
+        <img
+            src="{{ image.url }}"
+            alt="Uploaded Image"
+            class="w-[736px] mx-auto"
+        />
+    </div>
+
+    <!-- Delete confirmation message -->
+    <div class="mb-4 text-center">
+        <p class="text-red-500">Are you sure you want to delete {{ image.name }}?</p>
+    </div>
+
+    <!-- Cancel and Delete buttons -->
+    <div class="w-full flex justify-end space-x-4 p-4">
+        <a href="{% url 'read-image' oid=image.id %}">
+            <button
+                type="button"
+                class="button !bg-gray-200 !text-black"
+            >
+                Cancel
+            </button>
+        </a>
+        <form
+            method="POST"
+            action=""
+        >
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="button !bg-red-500"
+            >
+                Delete
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
