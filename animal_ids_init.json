@@ -1,0 +1,1262 @@
+[
+    {
+        "model": "core.animal",
+        "pk": 1,
+        "fields": {
+            "id_code": "V54A",
+            "name": null,
+            "marked": true,
+            "capture_date": "2001-06-22",
+            "cohort": "1996",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 2,
+        "fields": {
+            "id_code": "V03B",
+            "name": null,
+            "marked": true,
+            "capture_date": "2002-05-15",
+            "cohort": "1998",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 3,
+        "fields": {
+            "id_code": "V31B",
+            "name": null,
+            "marked": true,
+            "capture_date": "2002-07-18",
+            "cohort": "1998",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 4,
+        "fields": {
+            "id_code": "V16C",
+            "name": null,
+            "marked": true,
+            "capture_date": "2003-05-16",
+            "cohort": "1999",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 5,
+        "fields": {
+            "id_code": "V19D",
+            "name": null,
+            "marked": true,
+            "capture_date": "2004-10-06",
+            "cohort": "2001",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 6,
+        "fields": {
+            "id_code": "V12E",
+            "name": null,
+            "marked": true,
+            "capture_date": "2005-06-15",
+            "cohort": "2001",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 7,
+        "fields": {
+            "id_code": "V14E",
+            "name": null,
+            "marked": true,
+            "capture_date": "2005-07-06",
+            "cohort": "2002",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 8,
+        "fields": {
+            "id_code": "V11F",
+            "name": null,
+            "marked": true,
+            "capture_date": "2006-05-30",
+            "cohort": "2001",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 9,
+        "fields": {
+            "id_code": "V05G",
+            "name": null,
+            "marked": true,
+            "capture_date": "2007-06-04",
+            "cohort": "2001",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 10,
+        "fields": {
+            "id_code": "V06G",
+            "name": null,
+            "marked": true,
+            "capture_date": "2007-06-04",
+            "cohort": "2002",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 11,
+        "fields": {
+            "id_code": "V13G",
+            "name": null,
+            "marked": true,
+            "capture_date": "2007-06-11",
+            "cohort": "2003",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 12,
+        "fields": {
+            "id_code": "V10G",
+            "name": null,
+            "marked": true,
+            "capture_date": "2007-06-14",
+            "cohort": "2002",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 13,
+        "fields": {
+            "id_code": "V10H",
+            "name": null,
+            "marked": true,
+            "capture_date": "2008-06-09",
+            "cohort": "2002",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 14,
+        "fields": {
+            "id_code": "V11H",
+            "name": null,
+            "marked": true,
+            "capture_date": "2008-06-09",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 15,
+        "fields": {
+            "id_code": "V17H",
+            "name": null,
+            "marked": true,
+            "capture_date": "2008-06-17",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 16,
+        "fields": {
+            "id_code": "V19H",
+            "name": null,
+            "marked": true,
+            "capture_date": "2008-07-08",
+            "cohort": "2002",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 17,
+        "fields": {
+            "id_code": "V18H",
+            "name": null,
+            "marked": true,
+            "capture_date": "2008-07-08",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 18,
+        "fields": {
+            "id_code": "V01J",
+            "name": "anacleto",
+            "marked": true,
+            "capture_date": "2010-05-18",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 19,
+        "fields": {
+            "id_code": "V02J",
+            "name": "ernesto",
+            "marked": true,
+            "capture_date": "2010-05-18",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 20,
+        "fields": {
+            "id_code": "V04J",
+            "name": "jozin",
+            "marked": true,
+            "capture_date": "2010-05-18",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 21,
+        "fields": {
+            "id_code": "V03J",
+            "name": "pistacchio",
+            "marked": true,
+            "capture_date": "2010-05-18",
+            "cohort": "2003",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 22,
+        "fields": {
+            "id_code": "V05J",
+            "name": "archimede",
+            "marked": true,
+            "capture_date": "2010-05-28",
+            "cohort": "1998",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 23,
+        "fields": {
+            "id_code": "V07J",
+            "name": "ganjalf",
+            "marked": true,
+            "capture_date": "2010-05-28",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 24,
+        "fields": {
+            "id_code": "V06J",
+            "name": "gastone",
+            "marked": true,
+            "capture_date": "2010-05-28",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 25,
+        "fields": {
+            "id_code": "V10J",
+            "name": "mozart",
+            "marked": true,
+            "capture_date": "2010-06-04",
+            "cohort": "2006",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 26,
+        "fields": {
+            "id_code": "V09J",
+            "name": "peter",
+            "marked": true,
+            "capture_date": "2010-06-04",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 27,
+        "fields": {
+            "id_code": "V11J",
+            "name": "sabino",
+            "marked": true,
+            "capture_date": "2010-06-04",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 28,
+        "fields": {
+            "id_code": "V12J",
+            "name": "bazin",
+            "marked": true,
+            "capture_date": "2010-06-11",
+            "cohort": "2002",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 29,
+        "fields": {
+            "id_code": "V14J",
+            "name": "gavvino",
+            "marked": true,
+            "capture_date": "2010-06-11",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 30,
+        "fields": {
+            "id_code": "V15J",
+            "name": "pulce",
+            "marked": true,
+            "capture_date": "2010-06-11",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 31,
+        "fields": {
+            "id_code": "V16J",
+            "name": "framartino",
+            "marked": true,
+            "capture_date": "2010-09-23",
+            "cohort": "2006",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 32,
+        "fields": {
+            "id_code": "V07K",
+            "name": "billo",
+            "marked": true,
+            "capture_date": "2011-05-24",
+            "cohort": "2006",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 33,
+        "fields": {
+            "id_code": "V10K",
+            "name": "giorgio",
+            "marked": true,
+            "capture_date": "2011-05-24",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 34,
+        "fields": {
+            "id_code": "V09K",
+            "name": "joc",
+            "marked": true,
+            "capture_date": "2011-05-24",
+            "cohort": "2001",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 35,
+        "fields": {
+            "id_code": "V06K",
+            "name": "tritone",
+            "marked": true,
+            "capture_date": "2011-05-24",
+            "cohort": "2002",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 36,
+        "fields": {
+            "id_code": "V12K",
+            "name": "falcor",
+            "marked": true,
+            "capture_date": "2011-05-27",
+            "cohort": "1997",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 37,
+        "fields": {
+            "id_code": "V20K",
+            "name": "keaton",
+            "marked": true,
+            "capture_date": "2011-09-27",
+            "cohort": "2009",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 38,
+        "fields": {
+            "id_code": "V21K",
+            "name": "moscato",
+            "marked": true,
+            "capture_date": "2011-09-27",
+            "cohort": "2009",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 39,
+        "fields": {
+            "id_code": "V01L",
+            "name": "strike",
+            "marked": true,
+            "capture_date": "2012-04-19",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 40,
+        "fields": {
+            "id_code": "V02L",
+            "name": "snoopy",
+            "marked": true,
+            "capture_date": "2012-04-20",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 41,
+        "fields": {
+            "id_code": "V12L",
+            "name": "houston",
+            "marked": true,
+            "capture_date": "2012-05-24",
+            "cohort": "2009",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 42,
+        "fields": {
+            "id_code": "V15L",
+            "name": "fumin",
+            "marked": true,
+            "capture_date": "2012-06-08",
+            "cohort": "2008",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 43,
+        "fields": {
+            "id_code": "V14L",
+            "name": "nebbiolo",
+            "marked": true,
+            "capture_date": "2012-06-08",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 44,
+        "fields": {
+            "id_code": "V17L",
+            "name": "furia",
+            "marked": true,
+            "capture_date": "2012-06-18",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 45,
+        "fields": {
+            "id_code": "V16L",
+            "name": "granito",
+            "marked": true,
+            "capture_date": "2012-06-18",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 46,
+        "fields": {
+            "id_code": "V20L",
+            "name": "aliciotto",
+            "marked": true,
+            "capture_date": "2012-09-19",
+            "cohort": "2009",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 47,
+        "fields": {
+            "id_code": "V18L",
+            "name": "nampio",
+            "marked": true,
+            "capture_date": "2012-09-19",
+            "cohort": "2006",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 48,
+        "fields": {
+            "id_code": "V19L",
+            "name": "nedo",
+            "marked": true,
+            "capture_date": "2012-09-19",
+            "cohort": "2004",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 49,
+        "fields": {
+            "id_code": "V10N",
+            "name": "annibale",
+            "marked": true,
+            "capture_date": "2014-09-15",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 50,
+        "fields": {
+            "id_code": "V09N",
+            "name": "tor",
+            "marked": true,
+            "capture_date": "2014-09-15",
+            "cohort": "2003",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 51,
+        "fields": {
+            "id_code": "V01O",
+            "name": "camillo",
+            "marked": true,
+            "capture_date": "2015-05-05",
+            "cohort": "2009",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 52,
+        "fields": {
+            "id_code": "V02O",
+            "name": "arturo",
+            "marked": true,
+            "capture_date": "2015-05-06",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 53,
+        "fields": {
+            "id_code": "V03O",
+            "name": "mario",
+            "marked": true,
+            "capture_date": "2015-05-06",
+            "cohort": "2011",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 54,
+        "fields": {
+            "id_code": "V04O",
+            "name": "sabot",
+            "marked": true,
+            "capture_date": "2015-05-06",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 55,
+        "fields": {
+            "id_code": "V06O",
+            "name": "ciuck",
+            "marked": true,
+            "capture_date": "2015-05-13",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 56,
+        "fields": {
+            "id_code": "V05O",
+            "name": "jack",
+            "marked": true,
+            "capture_date": "2015-05-13",
+            "cohort": "2009",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 57,
+        "fields": {
+            "id_code": "V08O",
+            "name": "fidel",
+            "marked": true,
+            "capture_date": "2015-05-26",
+            "cohort": "2005",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 58,
+        "fields": {
+            "id_code": "V09O",
+            "name": "patrick",
+            "marked": true,
+            "capture_date": "2015-05-26",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 59,
+        "fields": {
+            "id_code": "V07O",
+            "name": "vladimir",
+            "marked": true,
+            "capture_date": "2015-05-26",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 60,
+        "fields": {
+            "id_code": "V03P",
+            "name": "salto",
+            "marked": true,
+            "capture_date": "2016-05-17",
+            "cohort": "2011",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 61,
+        "fields": {
+            "id_code": "V05P",
+            "name": "molotov",
+            "marked": true,
+            "capture_date": "2016-07-06",
+            "cohort": "2014",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 62,
+        "fields": {
+            "id_code": "V06P",
+            "name": "nikita",
+            "marked": true,
+            "capture_date": "2016-07-07",
+            "cohort": "2009",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 63,
+        "fields": {
+            "id_code": "V08P",
+            "name": "paolo",
+            "marked": true,
+            "capture_date": "2016-10-12",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 64,
+        "fields": {
+            "id_code": "V04Q",
+            "name": "meteoswiss",
+            "marked": true,
+            "capture_date": "2017-05-19",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 65,
+        "fields": {
+            "id_code": "V06Q",
+            "name": "julio",
+            "marked": true,
+            "capture_date": "2017-06-07",
+            "cohort": "2014",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 66,
+        "fields": {
+            "id_code": "V07Q",
+            "name": "tex",
+            "marked": true,
+            "capture_date": "2017-06-07",
+            "cohort": "2012",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 67,
+        "fields": {
+            "id_code": "V08Q",
+            "name": "francis",
+            "marked": true,
+            "capture_date": "2017-06-08",
+            "cohort": "2014",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 68,
+        "fields": {
+            "id_code": "V06R",
+            "name": "tappo",
+            "marked": true,
+            "capture_date": "2018-06-01",
+            "cohort": "2011",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 69,
+        "fields": {
+            "id_code": "V04R",
+            "name": "ticino",
+            "marked": true,
+            "capture_date": "2018-06-01",
+            "cohort": "2010",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 70,
+        "fields": {
+            "id_code": "V09R",
+            "name": "masox",
+            "marked": true,
+            "capture_date": "2018-06-08",
+            "cohort": "2012",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 71,
+        "fields": {
+            "id_code": "V04S",
+            "name": "crosta",
+            "marked": true,
+            "capture_date": "2019-05-16",
+            "cohort": "2015",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 72,
+        "fields": {
+            "id_code": "V03S",
+            "name": "forrest",
+            "marked": true,
+            "capture_date": "2019-05-16",
+            "cohort": "2013",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 73,
+        "fields": {
+            "id_code": "V05S",
+            "name": "gelo",
+            "marked": true,
+            "capture_date": "2019-05-16",
+            "cohort": "2013",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 74,
+        "fields": {
+            "id_code": "V06S",
+            "name": "ibis",
+            "marked": true,
+            "capture_date": "2019-06-04",
+            "cohort": "2013",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 75,
+        "fields": {
+            "id_code": "V02T",
+            "name": "neon",
+            "marked": true,
+            "capture_date": "2020-05-19",
+            "cohort": "2014",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 76,
+        "fields": {
+            "id_code": "V03T",
+            "name": "spiedino",
+            "marked": true,
+            "capture_date": "2020-05-19",
+            "cohort": "2013",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 77,
+        "fields": {
+            "id_code": "V03U",
+            "name": "alfred",
+            "marked": true,
+            "capture_date": "2021-05-17",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 78,
+        "fields": {
+            "id_code": "V01U",
+            "name": "anubi",
+            "marked": true,
+            "capture_date": "2021-05-17",
+            "cohort": "2014",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 79,
+        "fields": {
+            "id_code": "V02U",
+            "name": "ettore",
+            "marked": true,
+            "capture_date": "2021-05-17",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 80,
+        "fields": {
+            "id_code": "V04U",
+            "name": "sputnik",
+            "marked": true,
+            "capture_date": "2021-05-17",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 81,
+        "fields": {
+            "id_code": "V06U",
+            "name": "brunello",
+            "marked": true,
+            "capture_date": "2021-05-19",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 82,
+        "fields": {
+            "id_code": "V07U",
+            "name": "degioz",
+            "marked": true,
+            "capture_date": "2021-05-19",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 83,
+        "fields": {
+            "id_code": "V05U",
+            "name": "gerri",
+            "marked": true,
+            "capture_date": "2021-05-19",
+            "cohort": "2015",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 84,
+        "fields": {
+            "id_code": "V01V",
+            "name": "cento",
+            "marked": true,
+            "capture_date": "2022-05-12",
+            "cohort": "2011",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 85,
+        "fields": {
+            "id_code": "V02V",
+            "name": "rufus",
+            "marked": true,
+            "capture_date": "2022-05-12",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 86,
+        "fields": {
+            "id_code": "V01W",
+            "name": "libero",
+            "marked": true,
+            "capture_date": "2023-04-26",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 87,
+        "fields": {
+            "id_code": "V02W",
+            "name": "gap",
+            "marked": true,
+            "capture_date": "2023-04-26",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 88,
+        "fields": {
+            "id_code": "V04W",
+            "name": "rambo",
+            "marked": true,
+            "capture_date": "2023-05-04",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 89,
+        "fields": {
+            "id_code": "V05W",
+            "name": "gaio",
+            "marked": true,
+            "capture_date": "2023-05-04",
+            "cohort": "2015",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 90,
+        "fields": {
+            "id_code": "V06W",
+            "name": "raffaello",
+            "marked": true,
+            "capture_date": "2023-05-10",
+            "cohort": "2019",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 91,
+        "fields": {
+            "id_code": "V07W",
+            "name": "saro",
+            "marked": true,
+            "capture_date": "2023-05-10",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 92,
+        "fields": {
+            "id_code": "V08W",
+            "name": "ciok",
+            "marked": true,
+            "capture_date": "2023-05-10",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 93,
+        "fields": {
+            "id_code": "V09W",
+            "name": "coco",
+            "marked": true,
+            "capture_date": "2023-05-17",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 94,
+        "fields": {
+            "id_code": "V10W",
+            "name": "uovo",
+            "marked": true,
+            "capture_date": "2023-05-17",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 95,
+        "fields": {
+            "id_code": "V11W",
+            "name": "baldassarre",
+            "marked": true,
+            "capture_date": "2023-05-25",
+            "cohort": "2015",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 96,
+        "fields": {
+            "id_code": "V01X",
+            "name": "enea",
+            "marked": true,
+            "capture_date": "2024-04-30",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 97,
+        "fields": {
+            "id_code": "V02X",
+            "name": "fioretto",
+            "marked": true,
+            "capture_date": "2024-04-30",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 98,
+        "fields": {
+            "id_code": "V03X",
+            "name": "ozzy",
+            "marked": true,
+            "capture_date": "2024-04-30",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 99,
+        "fields": {
+            "id_code": "V04X",
+            "name": "skar",
+            "marked": true,
+            "capture_date": "2024-05-07",
+            "cohort": "2011",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 100,
+        "fields": {
+            "id_code": "V05X",
+            "name": "plodze",
+            "marked": true,
+            "capture_date": "2024-05-07",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 101,
+        "fields": {
+            "id_code": "V06X",
+            "name": "marcus",
+            "marked": true,
+            "capture_date": "2024-05-14",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 102,
+        "fields": {
+            "id_code": "V07X",
+            "name": "zambelli",
+            "marked": true,
+            "capture_date": "2024-05-14",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 103,
+        "fields": {
+            "id_code": "V08X",
+            "name": "cornelio",
+            "marked": true,
+            "capture_date": "2024-05-14",
+            "cohort": "2018",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 104,
+        "fields": {
+            "id_code": "V09X",
+            "name": "straccino",
+            "marked": true,
+            "capture_date": "2024-06-04",
+            "cohort": "2016",
+            "sex": "m"
+        }
+    },
+    {
+        "model": "core.animal",
+        "pk": 105,
+        "fields": {
+            "id_code": "V10X",
+            "name": "berio",
+            "marked": true,
+            "capture_date": "2024-06-04",
+            "cohort": "2020",
+            "sex": "m"
+        }
+    }
+]
