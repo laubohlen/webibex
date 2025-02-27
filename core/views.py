@@ -1,45 +1,20 @@
-import os
-import cv2
-import shutil
 import numpy as np
 
 from django.conf import settings
+from django.shortcuts import render, redirect, get_object_or_404
+from django.db.models.aggregates import Count
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
-from django.db.models.aggregates import Count
-from django.http import HttpResponseRedirect, JsonResponse
-from django.urls import reverse
-from django.shortcuts import render, redirect, get_object_or_404
-from django.core.files.base import ContentFile
 
-from pathlib import Path
-from io import BytesIO
-from PIL import Image
+from . import utils
 from core.models import IbexImage, IbexChip, Animal, Embedding, Region, Location
-from simple_landmarks.models import LandmarkItem, Landmark
+
 from filer.models import Folder
-from . import utils, b2_utils
+from simple_landmarks.models import LandmarkItem, Landmark
 
 
 def welcome_view(request):
     return render(request, "core/welcome.html")
-
-
-def upload_view(request):
-    # link to django-filer folder of the user
-    url = reverse("admin:filer_folder_changelist")
-    return HttpResponseRedirect(url)
-
-
-@login_required
-def unidentified_images_view(request):
-    # get all images that are not linked to any animal
-    unidentified_images = IbexImage.objects.filter(animal_id__isnull=True)
-    return render(
-        request,
-        "core/unidentified_images.html",
-        {"images": unidentified_images},
-    )
 
 
 @login_required
@@ -53,22 +28,21 @@ def saved_animal_selection_view(request):
         img.animal = get_object_or_404(Animal, pk=oid)
         img.save()
         print("Saved selected animal to IbexImage.")
+        return redirect("images-overview")
     else:
-        pass
+        # get all images of a specific animal
+        images = IbexImage.objects.filter(animal_id=oid)
+        # in case images is empty, get the animal name
+        if not images:
+            animal_id_code = get_object_or_404(Animal, pk=oid).id_code
+        else:
+            animal_id_code = images.first().animal.id_code
 
-    # get all images of a specific animal
-    images = IbexImage.objects.filter(animal_id=oid)
-    # in case images is empty, get the animal name
-    if not images:
-        animal_id_code = get_object_or_404(Animal, pk=oid).id_code
-    else:
-        animal_id_code = images.first().animal.id_code
-
-    return render(
-        request,
-        "core/animal_images.html",
-        {"images": images, "animal_id_code": animal_id_code},
-    )
+        return render(
+            request,
+            "core/animal_images.html",
+            {"images": images, "animal_id_code": animal_id_code},
+        )
 
 
 @login_required
@@ -88,330 +62,83 @@ def animal_images_view(request, oid):
 
 
 @login_required
-def observed_animal_view(request):
-    url_name = request.resolver_match.url_name
-
-    if url_name == "observed-animals":
-        # get all animals that are linked to one or more images
-        animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
-            image_count__gt=0
-        )
-    else:  # url_name == unobserved-animals
-        # get all animals that are not featured in any images
-        animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
-            image_count=0
-        )
+def animals_overview(request):
+    observed_animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
+        image_count__gt=0
+    )
+    unobserved_animals = animals = Animal.objects.annotate(
+        image_count=Count("ibeximage")
+    ).filter(image_count=0)
     # get all images that are not linked to any animal
     nr_unidentified_images = len(IbexImage.objects.filter(animal_id__isnull=True))
-
-    return render(
-        request,
-        "core/animal_table.html",
-        {
-            "animals": animals,
-            "no_id_count": nr_unidentified_images,
-            "url_name": url_name,
-        },
-    )
+    context = {
+        "observed_animals": observed_animals,
+        "unobserved_animals": unobserved_animals,
+        "nr_unidentified_images": nr_unidentified_images,
+    }
+    return render(request, "core/animal_overview.html", context)
 
 
-@login_required
-def unobserved_animal_view(request):
-    # get all animals that are not featured in any images
-    animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
-        image_count=0
-    )
-    return render(
-        request,
-        "core/animal_table.html",
-        {"animals": animals},
-    )
+def save_landmarks_view(request):
+    if request.method == "POST":
+        image_id = request.POST.get("image-id")
+        image = get_object_or_404(IbexImage, id=image_id)
 
+        # get landmarks relative to displayed image size
+        x_horn_scaled = int(request.POST.get("horn_x"))
+        y_horn_scaled = int(request.POST.get("horn_y"))
+        x_eye_scaled = int(request.POST.get("eye_x"))
+        y_eye_scaled = int(request.POST.get("eye_y"))
 
-@login_required
-def to_landmark_images_view(request):
-    # get all images that have no animal ID
-    user_id = request.user.id
-    images_to_landmark = IbexImage.objects.filter(owner_id=user_id).filter(
-        animal_id__isnull=True
-    )
-    return render(
-        request,
-        "core/to_landmark.html",
-        {"images": images_to_landmark},
-    )
+        # calculate landmark back relative to original image size
+        x_horn, y_horn = utils.scale_coordinate(
+            x_horn_scaled, y_horn_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
+        )
+        x_eye, y_eye = utils.scale_coordinate(
+            x_eye_scaled, y_eye_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
+        )
 
+        # save horn landmark
+        landmark_id = get_object_or_404(Landmark, label="horn_tip").id
+        content_type = ContentType.objects.get_for_model(IbexImage)
+        landmark = get_object_or_404(
+            LandmarkItem,
+            content_type=content_type,
+            object_id=image_id,
+            landmark_id=landmark_id,
+        )
+        landmark.x_coordinate = x_horn
+        landmark.y_coordinate = y_horn
+        landmark.save()
 
-@login_required
-def landmark_horn_view(request, oid):
-    image = get_object_or_404(IbexImage, id=oid)
-    return render(
-        request,
-        "simple_landmarks/horn_landmark.html",
-        {"image": image, "display_width": settings.LANDMARK_IMAGE_WIDTH},
-    )
+        # save eye landmark
+        landmark_id = get_object_or_404(Landmark, label="eye_corner").id
+        content_type = ContentType.objects.get_for_model(IbexImage)
+        landmark = get_object_or_404(
+            LandmarkItem,
+            content_type=content_type,
+            object_id=image_id,
+            landmark_id=landmark_id,
+        )
+        landmark.x_coordinate = x_eye
+        landmark.y_coordinate = y_eye
+        landmark.save()
 
+        print("about to process chip")
 
-@login_required
-def landmark_eye_view(request, oid):
-    image = get_object_or_404(IbexImage, id=oid)
+        # crop, save and embed horn chip
+        utils.process_horn_chip(image, x_horn, y_horn, x_eye, y_eye)
 
-    x_horn_scaled, y_horn_scaled = utils.parse_coordinates(request)
-    x_horn, y_horn = utils.scale_coordinate(
-        x_horn_scaled, y_horn_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
-    )
-    # save horn-landmark for that image
-    landmark_id = get_object_or_404(Landmark, label="horn_tip").id
-    content_type = ContentType.objects.get_for_model(IbexImage)
-    horn_landmark = get_object_or_404(
-        LandmarkItem,
-        content_type=content_type,
-        object_id=oid,
-        landmark_id=landmark_id,
-    )
-    horn_landmark.x_coordinate = x_horn
-    horn_landmark.y_coordinate = y_horn
-    horn_landmark.save()
-
-    # render eye_landmark page
-    return render(
-        request,
-        "simple_landmarks/eye_landmark.html",
-        {
-            "image": image,
-            "x_horn_scaled": x_horn_scaled,
-            "y_horn_scaled": y_horn_scaled,
-            "display_width": settings.LANDMARK_IMAGE_WIDTH,
-        },
-    )
-
-
-@login_required
-def finished_landmark_view(request, oid):
-    image = get_object_or_404(IbexImage, id=oid)
-    x_eye_scaled, y_eye_scaled = utils.parse_coordinates(request)
-    x_eye, y_eye = utils.scale_coordinate(
-        x_eye_scaled, y_eye_scaled, image.width, settings.LANDMARK_IMAGE_WIDTH
-    )
-    # save eye-landmark for that image
-    eye_landmark_id = get_object_or_404(Landmark, label="eye_corner").id
-    content_type = ContentType.objects.get_for_model(IbexImage)
-    eye_landmark = get_object_or_404(
-        LandmarkItem,
-        content_type=content_type,
-        object_id=oid,
-        landmark_id=eye_landmark_id,
-    )
-    eye_landmark.x_coordinate = x_eye
-    eye_landmark.y_coordinate = y_eye
-    eye_landmark.save()
-
-    # render landmarks on image
-    horn_landmark_id = get_object_or_404(Landmark, label="horn_tip").id
-    horn_landmark = get_object_or_404(
-        LandmarkItem,
-        content_type=content_type,
-        object_id=oid,
-        landmark_id=horn_landmark_id,
-    )
-    x_horn = horn_landmark.x_coordinate
-    y_horn = horn_landmark.y_coordinate
-    x_horn_scaled, y_horn_scaled = utils.scale_coordinate(
-        x_horn, y_horn, settings.LANDMARK_IMAGE_WIDTH, image.width
-    )
-    return render(
-        request,
-        "simple_landmarks/finished_landmarks.html",
-        {
-            "image": image,
-            "x_horn_scaled": x_horn_scaled,
-            "y_horn_scaled": y_horn_scaled,
-            "x_eye_scaled": x_eye_scaled,
-            "y_eye_scaled": y_eye_scaled,
-            "display_width": settings.LANDMARK_IMAGE_WIDTH,
-            # "x_horn_scaled": x_horn,
-            # "y_horn_scaled": y_horn,
-            # "x_eye_scaled": x_eye,
-            # "y_eye_scaled": y_eye,
-            # "display_width": image.width,
-        },
-    )
-
-
-@login_required
-def chip_view(request, oid):
-    image = get_object_or_404(IbexImage, id=oid)
-    print("image -", image)
-    chip_name = utils.get_chip_filename(image.file.name, settings.CHIP_FILETYPE)
-    print("chip name -", chip_name)
-
-    # Determine media storage environment
-    if settings.ENVIRONMENT == "production" or settings.POSTGRES_LOCALLY == True:
-        is_local = False
-    else:
-        is_local = True
-    print("is_local -", is_local)
-
-    if is_local:
-        image_path = os.path.join(settings.MEDIA_ROOT, image.file.name)
-        chip_url = os.path.join(os.path.split(image.url)[0], chip_name)
-        chip_path = Path(os.path.join(os.path.split(image_path)[0], chip_name))
-
-        # if a chip exists already, delete it before continuing
-        if chip_path.is_file():
-            chip_path.unlink()
-            # also update database
-            ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
-            ibex_chip.delete()
-            print(
-                "IbexChip already existed on local storage, deleted successfully before continueing."
-            )
-
-        # create new chip from original image and try to preserve all metadata
-        shutil.copy2(image_path, chip_path)
-
-        # load image
-        img = utils.load_image(chip_path)
+        # check if there is another image to landmark
+        next_id_index = request.POST.get("next_id_index")
+        if next_id_index not in (None, "None"):
+            return multi_task_view(request)
+        # if no next image, return where the user requested the task
+        else:
+            return redirect("unidentified-images")
 
     else:
-        # if a chip exists already, delete it before continuing
-        try:
-            ibex_chip = IbexChip.objects.get(ibex_image_id=image.id)
-            # If the object is found, continue with your logic here
-            print(f"IbexChip found in database with ibex_image_id: {image.id}")
-            print("Deleting previous ibex chip media file on backblaze..")
-            # chip_public_id = ibex_chip.file.name
-            image_bucket_path = os.path.join(settings.AWS_LOCATION, image.file.name)
-            chip_bucket_path = os.path.dirname(image_bucket_path)
-            chip_bucket_path = os.path.join(chip_bucket_path, chip_name)
-            # Check if the file exists in the B2 bucket
-            file_exists = b2_utils.check_file_exists(chip_bucket_path)
-
-            # If the file exists, proceed with deletion
-            if file_exists:
-                # Delete the file from Backblaze B2 bucket
-                b2_utils.delete_files([chip_bucket_path])
-
-                # Delete the associated IbexChip object from the database
-                ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
-                ibex_chip.delete()
-                print(
-                    f"File {chip_bucket_path} deleted from B2 bucket and IbexChip deleted from the database."
-                )
-            else:
-                print(
-                    "IbexChip not deleted because the file was not found in the B2 bucket."
-                )
-
-        except IbexChip.DoesNotExist:
-            # Handle the case where the object does not exist
-            print("IbexChip does not exist already, continueing normally..")
-            pass
-
-        # Download the image from cloud
-        bucket_file_path = os.path.join(settings.AWS_LOCATION, image.file.name)
-        img_object = b2_utils.download_file(bucket_file_path=bucket_file_path)
-        # Convert the response content to a NumPy array
-        img_array = np.frombuffer(img_object, np.uint8)
-
-        # Decode the image from the NumPy array
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-        if img is None:
-            raise ValueError("Failed to load image from cloud.")
-
-        print("Downloaded image from cloud.")
-
-    # load landmarks
-    content_type = ContentType.objects.get_for_model(IbexImage)
-    horn_landmark_id = get_object_or_404(Landmark, label="horn_tip").id
-    horn_landmark = get_object_or_404(
-        LandmarkItem,
-        content_type=content_type,
-        object_id=oid,
-        landmark_id=horn_landmark_id,
-    )
-    eye_landmark_id = get_object_or_404(Landmark, label="eye_corner").id
-    eye_landmark = get_object_or_404(
-        LandmarkItem,
-        content_type=content_type,
-        object_id=oid,
-        landmark_id=eye_landmark_id,
-    )
-    eyehorn_src = [
-        [eye_landmark.x_coordinate, eye_landmark.y_coordinate],
-        [horn_landmark.x_coordinate, horn_landmark.y_coordinate],
-    ]
-
-    # check animal side
-    # flip image if it is right taged
-    if image.side == "R":
-        img = cv2.flip(img, 1)  # along x-axis = around y-axis
-        # flip x-coordinates
-        eyehorn_src[0][0] = utils.mirror_coordinate(eyehorn_src[0][0], image.width)
-        eyehorn_src[1][0] = utils.mirror_coordinate(eyehorn_src[1][0], image.width)
-
-    # calculate coordniates where horn and eye should be in the output image
-    width_dst = settings.CHIP_WIDTH
-    height_dst = settings.CHIP_HEIGHT
-    eye_dst = (np.round(width_dst * 0.98), np.round(height_dst * 0.95))
-    tip_dst = (np.round(width_dst * 0.98), np.round(height_dst * 0.05))
-    eyehorn_dst = [eye_dst, tip_dst]
-
-    # affine transform image
-    tform = utils.similarityTransform(eyehorn_src, eyehorn_dst)
-    # note, height and width are exchanged here because we want a
-    # horizontal image first
-    shape_dst = (width_dst, height_dst)
-    img_transformed = cv2.warpAffine(img, tform, shape_dst)
-
-    # save
-    if is_local:
-        cv2.imwrite(chip_path, cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
-        print("path", chip_path)
-        chip_file = os.path.join(os.path.split(str(image.file.name))[0], chip_name)
-        print("file", chip_file)
-        IbexChip.objects.create(file=chip_file, ibex_image_id=image.id)
-        print("Chip saved locally using open-cv, database updated.")
-        ibex_chip = get_object_or_404(IbexChip, ibex_image_id=image.id)
-        print("Loaded ibex chip object")
-    else:
-        # Convert the image to the correct format for backblaze
-        buffer = BytesIO()
-        img_pil = Image.fromarray(cv2.cvtColor(img_transformed, cv2.COLOR_RGB2BGR))
-        img_pil.save(buffer, format="png")
-        buffer.seek(0)
-
-        # Use Django's FileField to handle the upload
-        chip_content = ContentFile(buffer.getvalue())
-
-        # Create the IbexChip instance
-        ibex_chip = IbexChip(ibex_image_id=image.id)
-        ibex_chip.file.save(chip_name, chip_content)
-        print("Chip saved on Backblaze using Django's FileField.")
-        chip_url = ibex_chip.file.url
-
-    # Call the custom method to process and embed the chip
-    utils.embed_new_chip(ibex_chip)
-
-    # eye_x_scaled, eye_y_scaled = scale_coordinate(
-    #     eye_landmark.x_coordinate,
-    #     eye_landmark.y_coordinate,
-    #     settings.LANDMARK_IMAGE_WIDTH,
-    #     image.width,
-    # )
-    # horn_x_scaled, horn_y_scaled = scale_coordinate(
-    #     horn_landmark.x_coordinate,
-    #     horn_landmark.y_coordinate,
-    #     settings.LANDMARK_IMAGE_WIDTH,
-    #     image.width,
-    # )
-
-    return render(
-        request,
-        "simple_landmarks/chip.html",
-        {"chip": chip_url, "side": image.side},
-    )
+        pass
 
 
 def results_over_view(request):
@@ -463,6 +190,9 @@ def show_result_view(request, oid):
 
     threshold_distance = 9.3
 
+    id_to_color = utils.id_color_mapping(top5_sorted_gallery)
+    print(id_to_color)
+
     return render(
         request,
         "core/result.html",
@@ -471,11 +201,17 @@ def show_result_view(request, oid):
             "gallery_and_distances": top5_sorted_gallery,
             "threshold": threshold_distance,
             "known_animals": known_animals,
+            "id_to_color": id_to_color,
         },
     )
 
 
 def rerun_view(request, oid):
+    """TODO: figure out way to best show the comparison that was shown
+    during the identification. Maybe just store ID's of images that where shown
+    together with the embedding? But what if images get deleted that where previously
+    used?
+    """
     query = get_object_or_404(IbexChip, id=oid)
     query_embedding = query.embedding.embedding
 
@@ -549,14 +285,8 @@ def created_animal_view(request, oid):
     original_image = get_object_or_404(IbexImage, id=query_chip.ibex_image_id)
     original_image.animal = get_object_or_404(Animal, id_code=new_code)
     original_image.save()
-    # get all images of a specific animal
-    images = IbexImage.objects.filter(animal__id_code=new_code)
 
-    return render(
-        request,
-        "core/animal_images.html",
-        {"images": images, "animal_id_code": new_code},
-    )
+    return redirect("images-overview")
 
 
 @login_required
@@ -652,6 +382,7 @@ def region_overview(request):
     return render(request, "core/region_overview.html", {"region_qs": region_qs})
 
 
+@login_required
 def save_image_location(request):
     if request.method == "POST":
         region_id = request.POST.get("region-id")
@@ -661,10 +392,8 @@ def save_image_location(request):
         location_source = request.POST.get("location-source")
         image_id = request.POST.get("image-id")
 
-        region = get_object_or_404(Region, pk=region_id)
-        # image = get_object_or_404(IbexImage, pk=image_id)
-
         # Update location
+        region = get_object_or_404(Region, pk=region_id)
         location = get_object_or_404(Location, pk=location_id)
         location.latitude = latitude
         location.longitude = longitude
@@ -673,11 +402,17 @@ def save_image_location(request):
         location.save()
         print(f"Location updated.")
 
-        return redirect("landmark-horn", oid=image_id)
+        next_id_index = request.POST.get("next_id_index")
+        if next_id_index not in (None, "None"):
+            return multi_task_view(request)
+        # if no next image, return where the user requested the task
+        else:
+            return redirect("unidentified-images")
     pass
 
 
-def set_image_location(request, oid):
+@login_required
+def create_loaction(request, oid):
     image = get_object_or_404(IbexImage, id=oid)
     image_location = image.location
     location_id = image_location.id
@@ -687,7 +422,7 @@ def set_image_location(request, oid):
     region_qs = Region.objects.filter(owner=request.user)
     return render(
         request,
-        "core/set_image_location.html",
+        "core/location_create.html",
         {
             "image": image,
             "image_location": image_location,
@@ -697,6 +432,7 @@ def set_image_location(request, oid):
     )
 
 
+@login_required
 def images_overview(request):
     # get all animals that are linked to one or more images
     animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
@@ -715,32 +451,91 @@ def images_overview(request):
     )
 
 
-# def image_upload(request):
-#     return render(request, "core/image_upload.html")
-
-
 @login_required
 def image_read(request, oid):
     image = get_object_or_404(IbexImage, pk=oid)
-    return render(request, "core/image_read.html", {"image": image})
+
+    return render(
+        request,
+        "core/image_read_new.html",
+        {
+            "image": image,
+        },
+    )
 
 
 @login_required
 def image_update(request, oid):
     image = get_object_or_404(IbexImage, pk=oid)
-    return render(request, "core/image_update.html", {"image": image})
+
+    # get landmarks for  the image
+    eye_landmark_id = get_object_or_404(Landmark, label="eye_corner").id
+    horn_landmark_id = get_object_or_404(Landmark, label="horn_tip").id
+    content_type = ContentType.objects.get_for_model(IbexImage)
+    eye_landmark = get_object_or_404(
+        LandmarkItem,
+        content_type=content_type,
+        object_id=oid,
+        landmark_id=eye_landmark_id,
+    )
+    horn_landmark = get_object_or_404(
+        LandmarkItem,
+        content_type=content_type,
+        object_id=oid,
+        landmark_id=horn_landmark_id,
+    )
+
+    x_eye_percent, y_eye_percent = utils.percentage_coordinate(
+        eye_landmark.x_coordinate,
+        eye_landmark.y_coordinate,
+        image.width,
+        image.height,
+    )
+
+    x_horn_percent, y_horn_percent = utils.percentage_coordinate(
+        horn_landmark.x_coordinate,
+        horn_landmark.y_coordinate,
+        image.width,
+        image.height,
+    )
+
+    if request.method == "POST":
+        side = request.POST.get("horn-side")
+        image.side = side
+        image.save()
+        print("Image updated")
+        return redirect("read-image", oid=image.id)
+
+    return render(
+        request,
+        "core/image_update_new.html",
+        {
+            "image": image,
+            "x_horn_percent": x_horn_percent,
+            "y_horn_percent": y_horn_percent,
+            "x_eye_percent": x_eye_percent,
+            "y_eye_percent": y_eye_percent,
+        },
+    )
 
 
 @login_required
 def image_delete(request, oid):
     image = get_object_or_404(IbexImage, pk=oid)
-    return render(request, "core/image_delete.html", {"image": image})
+    if request.method == "POST":
+        image.delete()
+        print("image deleted")
+        return redirect("images-overview")
+    return render(request, "core/image_delete_new.html", {"image": image})
 
 
 @login_required
 def image_upload(request):
     if request.method == "POST":
         files = request.FILES.getlist("images")
+        side = request.POST.get("horn-side")
+        if side == "later":
+            side = None
         # Retrieve the user's main folder (created by signal)
         upload_folder = Folder.objects.get(
             name=f"{request.user.username}_files", owner=request.user
@@ -748,11 +543,98 @@ def image_upload(request):
 
         for f in files:
             IbexImage.objects.create(
-                original_filename=f.name, file=f, folder=upload_folder
+                original_filename=f.name,
+                file=f,
+                folder=upload_folder,
+                side=side,
+                owner=request.user,
             )
 
         return redirect("images-overview")  # Redirect back
     return render(request, "core/image_upload.html")
+
+
+@login_required
+def unidentified_images_view(request):
+    if request.method == "POST":
+        return multi_task_view(request)
+
+    else:
+        # get all images that are not linked to any animal
+        unidentified_images = IbexImage.objects.filter(animal_id__isnull=True)
+        return render(
+            request,
+            "core/unidentified_images.html",
+            {"images": unidentified_images},
+        )
+
+
+@login_required
+def multi_task_view(request):
+    if request.method == "POST":
+        # what task is asked
+        task = request.POST.get("task")
+
+        # what files to use for the task
+        selected_img_ids = request.POST.getlist("selected-files")
+        selected_img_ids = [int(i) for i in selected_img_ids[0].split(",")]
+
+        if task == "tag_left":
+            IbexImage.objects.filter(id__in=selected_img_ids).update(side="L")
+            return redirect("unidentified-images")
+        elif task == "tag_right":
+            IbexImage.objects.filter(id__in=selected_img_ids).update(side="R")
+            return redirect("unidentified-images")
+        elif task == "tag_other":
+            IbexImage.objects.filter(id__in=selected_img_ids).update(side="O")
+            return redirect("unidentified-images")
+
+        else:
+            # current image
+            try:
+                current_id_index = int(request.POST.get("next_id_index", "0"))
+            except (TypeError, ValueError):
+                current_id_index = 0
+            current_image_id = selected_img_ids[current_id_index]
+            image = get_object_or_404(IbexImage, pk=current_image_id)
+
+            # next image
+            if current_id_index + 1 < len(selected_img_ids):
+                next_id_index = current_id_index + 1
+                next_image_id = selected_img_ids[next_id_index]
+            else:
+                next_id_index = None
+                next_image_id = None
+
+            # convert list of ints back to string
+            selected_img_ids = ",".join(map(str, selected_img_ids))
+
+            context = {
+                "image": image,
+                "current_id_index": current_id_index,
+                "next_image_id": next_image_id,
+                "next_id_index": next_id_index,
+                "selected_img_ids": selected_img_ids,
+            }
+
+            # get the correct url-pattern depending on the task
+            template, task_context = utils.multi_task_url(
+                task, image=image, user=request.user
+            )
+
+            # concatenate context
+            if task_context:
+                context = {**context, **task_context}
+
+            return render(request, template, context)
+
+    else:
+        unidentified_images = IbexImage.objects.filter(animal_id__isnull=True)
+        return render(
+            request,
+            "core/unidentified_images.html",
+            {"images": unidentified_images},
+        )
 
 
 @login_required
