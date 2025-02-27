@@ -189,13 +189,17 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
 def initialise_landmark_items(sender, instance, created, **kwargs):
     image = instance
     if created:
-        # initialise landmark-items for each landmark for the new image
+        # initialise landmark-items as 0 for each landmark for the new image
         content_type = ContentType.objects.get_for_model(IbexImage)
         landmarks = Landmark.objects.all()
         if landmarks:
             for lm in landmarks:
                 LandmarkItem.objects.create(
-                    content_type=content_type, object_id=image.id, landmark=lm
+                    content_type=content_type,
+                    object_id=image.id,
+                    landmark=lm,
+                    y_coordinate=0,
+                    x_coordinate=0,
                 )
             print("Created landmarkitem objects for image")
         else:
@@ -247,7 +251,11 @@ def create_folder_for_animal_on_change(sender, instance, **kwargs):
         if instance.animal:
             # Get animal ID and user
             animal_id = instance.animal.id_code
-            user = User.objects.get(pk=instance.owner_id)
+            try:
+                user = instance.owner
+            except User.DoesNotExist:
+                # If the user isn't found, exit early.
+                return
             username = user.username
             user_main_folder_name = f"{username}_files"
             user_main_foler = Folder.objects.filter(

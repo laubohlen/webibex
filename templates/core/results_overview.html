@@ -1,29 +1,25 @@
 {% extends 'layouts/empty.html' %} {% block content %}
-<div class="mx-auto mt-4 flex items-center justify-center md:max-w-6xl">
-    <table class="table-auto">
-        <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
-            <tr>
-                <th>file_name</th>
-                <th>side</th>
-                <th>chip</th>
-                <th>id</th>
-            </tr>
-        </thead>
-        <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
-            {% for i in images %}
-            <tr>
-                <td><a href="{% url 'run-again' oid=i.ibexchip.id %}">{{i.name}}</a></td>
-                <td>{{i.side}}</td>
-                {% if i.ibexchip.ibex_image_id %}
-                <td><a href="{{ i.ibexchip.url }}">ok</a></td>
-                {% else %}
-                <td>-</td>
-                <td>-</td>
-                {% endif %}
-                <td>{{ i.animal.id_code }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="mx-auto flex flex-col items-center justify-center md:max-w-6xl">
+    <div class="relative inline-block">
+        <table class="table-auto">
+            <h1>Results</h1>
+            <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
+                <tr>
+                    <th>file_name</th>
+                    <th>side</th>
+                    <th>id</th>
+                </tr>
+            </thead>
+            <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
+                {% for i in images %}
+                <tr>
+                    <td><a href="{% url 'read-image' oid=i.id %}">{{i.name}}</a></td>
+                    <td>{{i.side}}</td>
+                    <td><a href="{% url 'animal' oid=i.animal.id %}">{{ i.animal.id_code }}</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}

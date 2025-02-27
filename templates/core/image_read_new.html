@@ -1,0 +1,100 @@
+{% extends 'layouts/empty.html' %} {% block content %}
+<div class="max-w-screen-lg mx-auto">
+    <div class="flex flex-col md:flex-row gap-4">
+        <!-- Left Column: Large Image -->
+        <div class="w-full md:w-3/5 flex flex-col items-center">
+            <img
+                src="{{ image.url }}"
+                alt="Large Image"
+            />
+
+            <div class="mt-4 flex justify-end space-x-4 self-end">
+                <a href="{% url 'delete-image' oid=image.id %}">
+                    <button class="button !bg-red-500">Delete</button>
+                </a>
+                <a href="{% url 'update-image' oid=image.id %}">
+                    <button class="button !bg-gray-200 !text-black">Edit</button>
+                </a>
+            </div>
+        </div>
+        <!-- Right Column: File info, Location, and Small Image -->
+        <div class="w-full md:w-2/5 flex flex-col items-start text-left">
+            <!-- File Information -->
+            <div>
+                <label class="!mt-0 font-bold block">File Name:</label>
+                <p>{{ image.name }}</p>
+            </div>
+            <div>
+                <label class="font-bold block">Original File Name:</label>
+                <p>{{ image.original_filename }}</p>
+            </div>
+            <div>
+                <label class="font-bold block">Horn Side:</label>
+                {% if image.side %}
+                <p>{{ image.side }}</p>
+                {% else %}
+                <p>-</p>
+                {% endif %}
+            </div>
+            <!-- Location -->
+            <div>
+                <label class="font-bold block">Region:</label>
+                {% if image.location.region %}
+                <p>{{ image.location.region }}</p>
+                {% else %}
+                <button class="button">Set Location</button>
+                {% endif %}
+            </div>
+            <!-- Horn Chip -->
+            <div class="self-start">
+                <form
+                    method="POST"
+                    action="{% url 'multi-task' %}"
+                    style="display: inline"
+                >
+                    {% csrf_token %}
+                    <input
+                        type="hidden"
+                        name="selected-files"
+                        value="{{ image.id }}"
+                    />
+                    <input
+                        type="hidden"
+                        name="next_id_index"
+                        value="0"
+                    />
+                    <input
+                        type="hidden"
+                        name="task"
+                        value="landmark"
+                    />
+
+                    <label class="font-bold block">Horn Chip:</label>
+                    {% if image.side %} {% if image.ibexchip.url %}
+                    <img
+                        src="{{ image.ibexchip.url }}"
+                        alt="Small Image"
+                        class="h-[200px]"
+                    />
+                    {% else %}
+                    <button
+                        type="submit"
+                        class="button"
+                    >
+                        Set Landmarks
+                    </button>
+                    {% endif %} {% else %}
+                    <button
+                        disabled
+                        onclick="return false;"
+                        class="button"
+                    >
+                        Set Landmarks
+                    </button>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

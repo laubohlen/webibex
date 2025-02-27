@@ -1,0 +1,120 @@
+{% extends 'layouts/empty.html' %} {% block content %}
+<div class="container max-w-screen-md mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-6 text-center">Upload Images</h1>
+    <form
+        method="POST"
+        action="{% url 'upload-images' %}"
+        enctype="multipart/form-data"
+        x-data="{
+          isDragging: false,
+          files: [],
+          selectedSide: '',
+          updateFiles(e) {
+              let newFiles = Array.from(e.target.files);
+              this.files.push(...newFiles);
+              let dt = new DataTransfer();
+              this.files.forEach(file => dt.items.add(file));
+              $refs.fileInput.files = dt.files;
+          },
+          handleDrop(e) {
+              e.preventDefault();
+              this.isDragging = false;
+              let newFiles = Array.from(e.dataTransfer.files);
+              this.files.push(...newFiles);
+              let dt = new DataTransfer();
+              this.files.forEach(file => dt.items.add(file));
+              $refs.fileInput.files = dt.files;
+          }
+        }"
+    >
+        {% csrf_token %}
+        <!-- Select Files button -->
+        <div class="mt-4 flex justify-center">
+            <button
+                type="button"
+                class="text-white px-4 py-2 rounded"
+                onclick="document.getElementById('fileInput').click();"
+            >
+                Select Files
+            </button>
+        </div>
+
+        <!-- Dropzone area -->
+        <div
+            id="dropzone"
+            class="mt-4 border-2 border-dashed border-gray-400 rounded-lg p-8 flex flex-col items-center justify-center transition-colors duration-200"
+            :class="{ 'border-blue-700': isDragging }"
+            x-on:dragover.prevent="isDragging = true"
+            x-on:dragleave.prevent="isDragging = false"
+            x-on:drop="handleDrop($event)"
+        >
+            <p
+                class="text-gray-600"
+                x-text="isDragging ? 'Release to upload images' : 'Drag & drop images here'"
+            ></p>
+            <input
+                type="file"
+                id="fileInput"
+                name="images"
+                accept="image/*"
+                multiple
+                class="hidden"
+                x-ref="fileInput"
+                x-on:change="updateFiles($event)"
+            />
+            <!-- Display the list of selected file names with delete option -->
+            <template x-if="files.length > 0">
+                <div class="mt-4 w-full">
+                    <p class="font-bold mb-2">Files to be uploaded:</p>
+                    <ul class="list-disc list-inside">
+                        <template
+                            x-for="(file, index) in files"
+                            :key="file.name"
+                        >
+                            <li class="flex items-center">
+                                <span
+                                    @click="files.splice(index, 1); 
+                             let dt = new DataTransfer();
+                             files.forEach(f => dt.items.add(f));
+                             $refs.fileInput.files = dt.files"
+                                    class="cursor-pointer text-red-500 mr-2 select-none"
+                                >
+                                    &times;
+                                </span>
+                                <span x-text="file.name"></span>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </template>
+        </div>
+
+        <!-- Horn Side Dropdown -->
+        <div class="mt-4 flex justify-center">
+            <label for="horn-side">Chose horn side: </label>
+            <select
+                name="horn-side"
+                x-model="selectedSide"
+                class="border p-2 rounded"
+            >
+                <option value="">---</option>
+                <option value="L">left</option>
+                <option value="R">right</option>
+                <option value="O">other</option>
+                <option value="later">set later</option>
+            </select>
+        </div>
+
+        <!-- Submit (Upload) button -->
+        <div class="mt-4 flex justify-center">
+            <button
+                type="submit"
+                x-bind:disabled="files.length === 0 || selectedSide === ''"
+                class="text-white px-4 py-2 rounded bgBlueCustom disabled:bg-gray-200 disabled:cursor-not-allowed"
+            >
+                Upload
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
