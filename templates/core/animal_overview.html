@@ -1,0 +1,112 @@
+{% extends 'layouts/empty.html' %} {% block content %}
+<div class="mx-auto flex flex-col items-center justify-center md:max-w-6xl">
+    <div class="relative inline-block">
+        <!-- Header row that spans the table width -->
+        <div class="absolute top-0 right-1 mb-2 flex items-center space-x-2">
+            <label class="inline-flex items-center cursor-pointer">
+                <span
+                    class="mr-2 textBlueCustom"
+                    id="toggle-label"
+                    >Observed</span
+                >
+                <input
+                    type="checkbox"
+                    id="toggle-checkbox"
+                    class="hidden"
+                    checked
+                />
+                <div class="w-10 h-6 bgBlueCustom rounded-full shadow-inner relative">
+                    <!-- The dot; its position will change when the checkbox is toggled -->
+                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transform transition duration-300 left-1 top-1"></div>
+                </div>
+            </label>
+        </div>
+        <!-- Table -->
+        <table class="table-auto">
+            <h1 class="text-2xl font-bold">Animals</h1>
+
+            <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
+                <tr>
+                    <th>id_code</th>
+                    <th>name</th>
+                    <th>sex</th>
+                    <th>cohort</th>
+                    <th>capture date</th>
+                    <th>images</th>
+                </tr>
+            </thead>
+            <!-- Observed Animals Body -->
+            <tbody
+                id="observed-animals"
+                class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2"
+            >
+                <tr>
+                    <td><a href="{% url 'unidentified-images'%}">unidentified</a></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td>{{nr_unidentified_images}}</td>
+                </tr>
+                {% for animal in observed_animals %}
+                <tr>
+                    <td><a href="{% url 'animal' oid=animal.id %}">{{ animal.id_code }}</a></td>
+                    <td>{{ animal.name }}</td>
+                    <td>{{ animal.sex }}</td>
+                    <td>{{ animal.cohort }}</td>
+                    <td>{{ animal.capture_date }}</td>
+                    <td>{{ animal.ibeximage_set.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <!-- Unobserved Animals Body -->
+            <tbody
+                id="unobserved-animals"
+                class="hidden [&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2"
+            >
+                {% for animal in unobserved_animals %}
+                <tr>
+                    <td><a href="{% url 'animal' oid=animal.id %}">{{ animal.id_code }}</a></td>
+                    <td>{{ animal.name }}</td>
+                    <td>{{ animal.sex }}</td>
+                    <td>{{ animal.cohort }}</td>
+                    <td>{{ animal.capture_date }}</td>
+                    <td>{{ animal.ibeximage_set.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const toggleCheckbox = document.getElementById("toggle-checkbox");
+        const toggleDot = document.querySelector(".toggle-dot");
+        const toggleLabel = document.getElementById("toggle-label");
+        const observedTable = document.getElementById("observed-animals");
+        const unobservedTable = document.getElementById("unobserved-animals");
+
+        // Function to update the UI based on the toggle state
+        function updateToggleState() {
+            if (toggleCheckbox.checked) {
+                toggleDot.classList.add("translate-x-4");
+                toggleLabel.textContent = "Observed";
+                observedTable.classList.remove("hidden");
+                unobservedTable.classList.add("hidden");
+            } else {
+                toggleDot.classList.remove("translate-x-4");
+                toggleLabel.textContent = "Unobserved";
+                observedTable.classList.add("hidden");
+                unobservedTable.classList.remove("hidden");
+            }
+        }
+
+        // Set the initial state on page load
+        updateToggleState();
+
+        // Listen for changes on the toggle
+        toggleCheckbox.addEventListener("change", updateToggleState);
+    });
+</script>
+{% endblock %}

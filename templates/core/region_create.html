@@ -1,7 +1,11 @@
 {% extends 'layouts/empty.html' %} {% load static %}{% block content %}
-<div class="max-w-screen-md mx-auto p-4">
+<div class="max-w-screen-md mx-auto px-4">
     <div>
-        <label for="region-name">Enter region name:</label>
+        <label
+            class="font-bold"
+            for="region-name"
+            >Enter region name:</label
+        >
         <input
             type="text"
             id="region-name"
@@ -14,14 +18,22 @@
         ></p>
     </div>
     <div>
-        <label for="radius">Radius in meters from origin:</label>
+        <label
+            class="font-bold"
+            for="radius"
+            >Radius in meters from origin:</label
+        >
         <input
             type="text"
             id="radius"
             class="border p-2 rounded-md focus:ring-2 focus:ring-blue-500"
         />
     </div>
-    <label for="map">Select origin:</label>
+    <label
+        class="font-bold"
+        for="map"
+        >Select origin:</label
+    >
     <div
         id="map"
         class="p-4"

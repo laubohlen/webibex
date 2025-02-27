@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
     // initilize leaflet map
-    var map = L.map("map").setView([45.578559, 7.230163], 14);
+    var map = L.map("map").setView([45.578559, 7.230163], 13);
 
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,

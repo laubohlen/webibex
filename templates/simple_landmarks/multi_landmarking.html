@@ -1,0 +1,118 @@
+{% extends 'base.html' %} {% block layout %}
+<main
+    class="fixedContainer"
+    style="width: {{ display_width }}px;"
+    x-data="landmarkApp()"
+>
+    <h1 class="mb-2 flex items-center justify-center">Annotation tasks:&nbsp;<span class="HightlightGreen">horn_tip</span>,&nbsp;<span class="HightlightPink">eye_corner</span></h1>
+    <div class="flex justify-center">
+        <div class="inline-block text-left">
+            <p>1. Click on the very <span class="underline mx-4">tip of the horn</span> (green)</p>
+            <p>2. Click on the <span class="underline mx-4">ear facing corner</span> of the eye (pink)</p>
+        </div>
+    </div>
+    <div class="flex justify-center mt-4">
+        <button
+            type="submit"
+            form="save-landmarks"
+            class="mb-2 button"
+            x-bind:disabled="!horn || !eye"
+        >
+            Confirm
+        </button>
+    </div>
+    <div class="relative">
+        <img
+            src="{{ image.url }}"
+            alt="Clickable Image"
+            class="p-0 imageToLandmark"
+            @click="handleClick($event)"
+        />
+        <!-- Horn marker (green) -->
+        <div
+            x-show="horn"
+            class="greenDot"
+            :style="horn ? `top: ${horn.y - 4}px; left: ${horn.x - 4}px;` : ''"
+        ></div>
+        <!-- Eye marker (pink) -->
+        <div
+            x-show="eye"
+            class="pinkDot"
+            :style="eye ? `top: ${eye.y - 4}px; left: ${eye.x - 4}px;` : ''"
+        ></div>
+    </div>
+    <form
+        method="POST"
+        action="{% url 'save-landmarks' %}"
+        class="mt-4"
+        id="save-landmarks"
+    >
+        {% csrf_token %}
+        <input
+            type="hidden"
+            name="image-id"
+            value="{{ image.id }}"
+        />
+        <input
+            type="hidden"
+            name="task"
+            value="landmark"
+        />
+        <input
+            type="hidden"
+            name="next_id_index"
+            value="{{ next_id_index }}"
+        />
+        <input
+            type="hidden"
+            name="selected-files"
+            value="{{ selected_img_ids }}"
+        />
+        <!-- Hidden inputs for horn and eye coordinates -->
+        <input
+            type="hidden"
+            name="horn_x"
+            :value="horn ? horn.x : ''"
+        />
+        <input
+            type="hidden"
+            name="horn_y"
+            :value="horn ? horn.y : ''"
+        />
+        <input
+            type="hidden"
+            name="eye_x"
+            :value="eye ? eye.x : ''"
+        />
+        <input
+            type="hidden"
+            name="eye_y"
+            :value="eye ? eye.y : ''"
+        />
+    </form>
+</main>
+
+<script>
+    function landmarkApp() {
+        return {
+            horn: null,
+            eye: null,
+            clickCount: 0,
+            handleClick(event) {
+                // Get image position relative to the viewport.
+                const rect = event.target.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                this.clickCount++;
+                if (this.clickCount % 2 === 1) {
+                    // Odd click: set/update horn landmark.
+                    this.horn = { x: x, y: y };
+                } else {
+                    // Even click: set/update eye landmark.
+                    this.eye = { x: x, y: y };
+                }
+            },
+        };
+    }
+</script>
+{% endblock %}
