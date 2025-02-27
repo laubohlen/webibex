@@ -29,26 +29,13 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("filer/", include("filer.urls")),
     path("", welcome_view, name="welcome"),
-    path("upload-admin/", upload_view, name="admin-upload"),
-    path("images/", images_overview, name="images-overview"),
+    path("identification/", images_overview, name="images-overview"),
     path("upload/", image_upload, name="upload-images"),
     re_path(r"^image/(?P<oid>[0-9]+)/$", image_read, name="read-image"),
     re_path(r"^update-image/(?P<oid>[0-9]+)/$", image_update, name="update-image"),
     re_path(r"^update-delete/(?P<oid>[0-9]+)/$", image_delete, name="delete-image"),
-    path("observed/", observed_animal_view, name="observed-animals"),
-    path("unobserved/", unobserved_animal_view, name="unobserved-animals"),
+    path("animals/", animals_overview, name="animals"),
     path("unidentified/", unidentified_images_view, name="unidentified-images"),
-    path("to-landmark/", to_landmark_images_view, name="to-landmark"),
-    re_path(
-        r"^landmark_horn/(?P<oid>[0-9]+)/$", landmark_horn_view, name="landmark-horn"
-    ),
-    re_path(r"^landmark_eye/(?P<oid>[0-9]+)/$", landmark_eye_view, name="landmark-eye"),
-    re_path(
-        r"^finished_landmarks/(?P<oid>[0-9]+)/$",
-        finished_landmark_view,
-        name="finished-landmarks",
-    ),
-    re_path(r"^chip/(?P<oid>[0-9]+)/$", chip_view, name="chip"),
     path("results/", results_over_view, name="results-overview"),
     re_path(r"^result/(?P<oid>[0-9]+)/$", show_result_view, name="result"),
     re_path(r"^run_again/(?P<oid>[0-9]+)/$", rerun_view, name="run-again"),
@@ -66,11 +53,13 @@ urlpatterns = [
     re_path(r"^update-region/(?P<oid>[0-9]+)/$", update_region, name="update-region"),
     path("region-overview/", region_overview, name="region-overview"),
     re_path(
-        r"^set-image-location/(?P<oid>[0-9]+)/$",
-        set_image_location,
-        name="set-image-location",
+        r"^locate-image/(?P<oid>[0-9]+)/$",
+        create_loaction,
+        name="locate-image",
     ),
+    path("multi-task/", multi_task_view, name="multi-task"),
     path("save-image-location/", save_image_location, name="save-image-location"),
+    path("save-landmarks/", save_landmarks_view, name="save-landmarks"),
 ]
 
 if settings.DEBUG:
