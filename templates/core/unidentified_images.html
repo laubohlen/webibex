@@ -1,19 +1,200 @@
 {% extends 'layouts/empty.html' %} {% block content %}
-<div class="mx-auto mt-4 flex flex-col items-center justify-center md:max-w-6xl">
-    <table class="table-auto">
-        <h1>Unidentified Images</h1>
-        <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
-            <tr>
-                <th>file_name</th>
-            </tr>
-        </thead>
-        <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
-            {% for i in images %}
-            <tr>
-                <td><a href="{{i.url}}">{{i}}</a></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div
+    class="mx-auto flex flex-col items-center justify-center md:max-w-6xl"
+    x-data="{ 
+        selected: [],
+        tool: '',
+        allIds: [{% for i in images %}{{ i.id }}{% if not forloop.last %}, {% endif %}{% endfor %}]
+    }"
+    x-effect="if(selected.length === 0){ tool = ''; }"
+>
+    <div class="relative inline-block">
+        <!-- Tools Dropdown, positioned absolutely at the top-right of the container -->
+        <div class="absolute top-0 right-1 mb-2 flex items-center space-x-2">
+            <select
+                name="tools"
+                id="tools"
+                x-model="tool"
+                x-bind:disabled="selected.length === 0"
+                class="border p-1 rounded-md focus:ring-2 focus:ring-blue-500"
+            >
+                <option value="">Tools</option>
+                <option value="tag_left">Tag Left</option>
+                <option value="tag_right">Tag Right</option>
+                <option value="tag_other">Tag Other</option>
+                <option value="locate">Locate</option>
+                <option value="landmark">Landmark</option>
+                <option value="delete">Delete</option>
+                <option value="view">View</option>
+            </select>
+            <form
+                method="POST"
+                action="{% url 'unidentified-images' %}"
+            >
+                {% csrf_token %}
+                <!-- (Your tools dropdown and table go here) -->
+                <input
+                    type="hidden"
+                    name="selected-files"
+                    :value="selected.join(',')"
+                />
+                <input
+                    type="hidden"
+                    name="task"
+                    :value="tool"
+                />
+                <button
+                    type="submit"
+                    x-show="tool !== ''"
+                    class="button !bg-blue-500"
+                >
+                    &gt;
+                </button>
+            </form>
+        </div>
+
+        <!-- Table -->
+        <table class="table-auto">
+            <h1>Unidentified Images</h1>
+            <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
+                <tr>
+                    <th>file_name</th>
+                    <th>side</th>
+                    <th>location</th>
+                    <th>chip</th>
+                    <th>action</th>
+                    <!-- New selection column header with select-all checkbox -->
+                    <th>
+                        <input
+                            type="checkbox"
+                            id="select-all"
+                            class="cursor-pointer"
+                            @click="selected = $event.target.checked ? allIds : []"
+                        />
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
+                {% for i in images %}
+                <tr>
+                    <!-- file_name column -->
+                    <td><a href="{% url 'read-image' oid=i.id %}">{{ i.original_filename }}</a></td>
+
+                    <!-- side column -->
+                    {% if i.side %}
+                    <td>{{ i.side }}</td>
+                    {% else %}
+                    <td>-</td>
+                    {% endif %}
+
+                    <!-- location column -->
+                    {% if i.location.latitude %}
+                    <td><a href="{% url 'locate-image' oid=i.id %}">location</a></td>
+                    {% else %}
+                    <td>
+                        <a
+                            href="{% url 'locate-image' oid=i.id %}"
+                            class="button"
+                            >set</a
+                        >
+                    </td>
+                    {% endif %}
+
+                    <!-- chip column -->
+                    {% if i.ibexchip.ibex_image_id %}
+                    <td>
+                        <a href="{{ i.ibexchip.url }}">ok</a>
+                    </td>
+                    {% else %}
+                    <td>
+                        {% if i.side %}
+                        <form
+                            method="POST"
+                            action="{% url 'multi-task' %}"
+                            style="display: inline"
+                        >
+                            {% csrf_token %}
+                            <input
+                                type="hidden"
+                                name="selected-files"
+                                value="{{ i.id }}"
+                            />
+                            <input
+                                type="hidden"
+                                name="next_id_index"
+                                value="0"
+                            />
+                            <input
+                                type="hidden"
+                                name="task"
+                                value="landmark"
+                            />
+                            <button
+                                type="submit"
+                                class="button"
+                            >
+                                set
+                            </button>
+                        </form>
+                        {% else %}
+                        <button
+                            class="button"
+                            disabled
+                            onclick="return false;"
+                        >
+                            set
+                        </button>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+
+                    <!-- action column -->
+                    {% if i.location.latitude and i.ibexchip.ibex_image_id and i.side %}
+                    <td>
+                        <a
+                            href="{% url 'result' oid=i.ibexchip.id %}"
+                            class="button"
+                            >id</a
+                        >
+                    </td>
+                    {% else %}
+                    <td>
+                        <button
+                            class="button"
+                            disabled
+                            onclick="return false;"
+                        >
+                            id
+                        </button>
+                    </td>
+                    {% endif %}
+
+                    <!-- New selection checkbox column -->
+                    <td>
+                        <input
+                            type="checkbox"
+                            class="row-checkbox cursor-pointer"
+                            name="selected-images"
+                            value="{{ i.id }}"
+                            x-model="selected"
+                        />
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const selectAll = document.getElementById("select-all");
+        selectAll.addEventListener("change", function () {
+            const checkboxes = document.querySelectorAll(".row-checkbox");
+            checkboxes.forEach((chk) => {
+                chk.checked = selectAll.checked;
+            });
+        });
+    });
+</script>
 {% endblock %}

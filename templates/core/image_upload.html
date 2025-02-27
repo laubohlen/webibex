@@ -6,32 +6,33 @@
         action="{% url 'upload-images' %}"
         enctype="multipart/form-data"
         x-data="{
-        isDragging: false,
-        files: [],
-        updateFiles(e) {
-            let newFiles = Array.from(e.target.files);
-            this.files.push(...newFiles);
-            let dt = new DataTransfer();
-            this.files.forEach(file => dt.items.add(file));
-            $refs.fileInput.files = dt.files;
-        },
-        handleDrop(e) {
-            e.preventDefault();
-            this.isDragging = false;
-            let newFiles = Array.from(e.dataTransfer.files);
-            this.files.push(...newFiles);
-            let dt = new DataTransfer();
-            this.files.forEach(file => dt.items.add(file));
-            $refs.fileInput.files = dt.files;
-        }
-    }"
+          isDragging: false,
+          files: [],
+          selectedSide: '',
+          updateFiles(e) {
+              let newFiles = Array.from(e.target.files);
+              this.files.push(...newFiles);
+              let dt = new DataTransfer();
+              this.files.forEach(file => dt.items.add(file));
+              $refs.fileInput.files = dt.files;
+          },
+          handleDrop(e) {
+              e.preventDefault();
+              this.isDragging = false;
+              let newFiles = Array.from(e.dataTransfer.files);
+              this.files.push(...newFiles);
+              let dt = new DataTransfer();
+              this.files.forEach(file => dt.items.add(file));
+              $refs.fileInput.files = dt.files;
+          }
+        }"
     >
         {% csrf_token %}
         <!-- Select Files button -->
         <div class="mt-4 flex justify-center">
             <button
                 type="button"
-                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                class="text-white px-4 py-2 rounded"
                 onclick="document.getElementById('fileInput').click();"
             >
                 Select Files
@@ -73,9 +74,9 @@
                             <li class="flex items-center">
                                 <span
                                     @click="files.splice(index, 1); 
-                                              let dt = new DataTransfer();
-                                              files.forEach(f => dt.items.add(f));
-                                              $refs.fileInput.files = dt.files"
+                             let dt = new DataTransfer();
+                             files.forEach(f => dt.items.add(f));
+                             $refs.fileInput.files = dt.files"
                                     class="cursor-pointer text-red-500 mr-2 select-none"
                                 >
                                     &times;
@@ -88,28 +89,32 @@
             </template>
         </div>
 
+        <!-- Horn Side Dropdown -->
+        <div class="mt-4 flex justify-center">
+            <label for="horn-side">Chose horn side: </label>
+            <select
+                name="horn-side"
+                x-model="selectedSide"
+                class="border p-2 rounded"
+            >
+                <option value="">---</option>
+                <option value="L">left</option>
+                <option value="R">right</option>
+                <option value="O">other</option>
+                <option value="later">set later</option>
+            </select>
+        </div>
+
         <!-- Submit (Upload) button -->
         <div class="mt-4 flex justify-center">
             <button
                 type="submit"
-                x-bind:disabled="files.length === 0"
-                class="text-white px-4 py-2 rounded hover:bg-blue-600"
+                x-bind:disabled="files.length === 0 || selectedSide === ''"
+                class="text-white px-4 py-2 rounded bgBlueCustom disabled:bg-gray-200 disabled:cursor-not-allowed"
             >
                 Upload
             </button>
         </div>
     </form>
 </div>
-
-<!-- Optional: Basic drop handler -->
-<script>
-    function handleDrop(event) {
-        // Retrieve the dropped files.
-        const files = event.dataTransfer.files;
-        // For now, just log them. Later, you can attach them to a form submission.
-        console.log("Dropped files:", files);
-        // Optionally, set them on the file input (if needed for further processing)
-        document.getElementById("fileInput").files = files;
-    }
-</script>
 {% endblock %}
