@@ -1,0 +1,187 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.fixedContainer {
+    /* size doesnt change when window size changes */
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    padding-top: 1rem;
+    /* padding-left: 1rem;
+    padding-right: 1rem; */
+    /* width: 1600px; */
+    height: auto;
+    margin: 0 auto 1em auto; /*Center the image*/
+    /* background-color: antiquewhite; */
+}
+.headertext {
+    line-height: 1;
+    font-weight: bold;
+    font-family: "IBM Plex Mono";
+}
+.thumbnail > * > a {
+    position: relative;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    /* @apply mx-auto max-w-full; */
+}
+.card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    /* border-radius: 0rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); */
+    margin-bottom: 1rem;
+    /* background-color: lightblue; */
+    padding-bottom: 1rem;
+    width: 100%;
+}
+.HightlightGreen {
+    background: springgreen;
+}
+.HightlightPink {
+    background: fuchsia;
+}
+.drawOnImage {
+    position: relative;
+}
+.greenDot {
+    height: 8px;
+    width: 8px;
+    border-radius: 100%;
+    background: springgreen;
+    position: absolute;
+}
+.pinkDot {
+    height: 8px;
+    width: 8px;
+    border-radius: 100%;
+    background: fuchsia;
+    position: absolute;
+}
+.imageToLandmark {
+    /* margin-top: 4; */
+    cursor: default;
+}
+.rightChip {
+    /* margin-top: 4; */
+    cursor: default;
+    transform: scaleX(-1);
+}
+.hiddenLink {
+    color: black;
+    text-decoration: none;
+}
+.textBlueCustom {
+    --tw-text-opacity: 1;
+    color: #0000ee;
+    /* color: rgb(37 99 235 / var(--tw-text-opacity)) */
+}
+.bgBlueCustom {
+    --tw-bg-opacity: 1;
+    background-color: #0000ee;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+}
+h1 {
+    font-family: "IBM Plex Mono";
+    font-weight: bold;
+    font-size: x-large;
+    margin-bottom: 0.5rem;
+}
+h3 {
+    font-family: "IBM Plex Mono";
+}
+
+p {
+    font-family: "IBM Plex Mono";
+    /* margin-bottom: 0.5rem; */
+}
+a {
+    color: #0000ee;
+    text-decoration: underline;
+}
+li {
+    font-family: "IBM Plex Mono";
+}
+button {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    border-radius: 0.375rem /* 6px */;
+}
+form p {
+    display: flex;
+    align-items: center;
+    /* margin-bottom: 0.5rem; */
+}
+label,
+input {
+    display: inline-block;
+}
+form p label {
+    width: 9rem;
+}
+label {
+    margin: 4px 0 0;
+    font-family: "IBM Plex Mono";
+}
+input,
+textarea {
+    width: 100%;
+    padding: 0.5rem 1.2rem;
+    background-color: rgb(244, 244, 244);
+    font-family: "IBM Plex Mono";
+}
+input[type="file"],
+select {
+    background-color: white;
+    padding-left: 0;
+}
+label[for="id_remember"] {
+    width: auto;
+    margin-right: 0.5rem;
+}
+input[name="remember"] {
+    width: auto;
+}
+.button,
+[type="submit"],
+[type="button"] {
+    font-family: "IBM Plex Mono";
+    text-decoration: none;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    text-align: center;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    min-height: 2rem;
+    /* font-weight: 600; */
+    /* box-shadow: 0 4px 3px rgba(0, 0, 0, 0.1); */
+    transition-property: transform;
+    transition-duration: 0.2s;
+    color: white;
+    background-color: #0000ee;
+    width: fit-content;
+}
+
+.button:disabled,
+[type="submit"]:disabled,
+[type="button"]:disabled {
+    background-color: #e5e7eb !important;
+    cursor: not-allowed;
+    --tw-text-opacity: 1;
+    color: rgb(255 255 255 / var(--tw-text-opacity));
+    border-radius: 0.25rem /* 4px */;
+}
