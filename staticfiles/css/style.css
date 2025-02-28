@@ -759,6 +759,10 @@ video {
   height: 100%;
 }
 
+.h-5 {
+  height: 1.25rem;
+}
+
 .w-10 {
   width: 2.5rem;
 }
@@ -781,6 +785,10 @@ video {
 
 .w-full {
   width: 100%;
+}
+
+.w-5 {
+  width: 1.25rem;
 }
 
 .max-w-3xl {
@@ -1439,6 +1447,14 @@ input[name="remember"] {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity));
   border-radius: 0.25rem /* 4px */;
+}
+
+/*force native checkboxes to prevent safaris default styling*/
+
+input[type="checkbox"] {
+  -webkit-appearance: checkbox;
+  -moz-appearance: checkbox;
+       appearance: checkbox;
 }
 
 .hover\:bg-blue-100:hover {

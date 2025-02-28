@@ -185,3 +185,8 @@ input[name="remember"] {
     color: rgb(255 255 255 / var(--tw-text-opacity));
     border-radius: 0.25rem /* 4px */;
 }
+/*force native checkboxes to prevent safaris default styling*/
+input[type="checkbox"] {
+    -webkit-appearance: checkbox;
+    appearance: checkbox;
+}

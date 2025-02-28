@@ -68,7 +68,7 @@
                         <input
                             type="checkbox"
                             id="select-all"
-                            class="cursor-pointer"
+                            class="cursor-pointer w-5 h-5"
                             @click="selected = $event.target.checked ? allIds : []"
                         />
                     </th>
@@ -173,7 +173,7 @@
                     <td>
                         <input
                             type="checkbox"
-                            class="row-checkbox cursor-pointer"
+                            class="row-checkbox cursor-pointer w-5 h-5"
                             name="selected-images"
                             value="{{ i.id }}"
                             x-model="selected"
