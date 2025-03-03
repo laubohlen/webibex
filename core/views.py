@@ -4,7 +4,7 @@ from django.conf import settings
 from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.exceptions import PermissionDenied
-from django.db.models.aggregates import Count
+from django.db.models import Count, Q
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 
@@ -438,11 +438,13 @@ def create_loaction(request, oid):
 @login_required
 def images_overview(request):
     # get all animals that are linked to one or more images
-    animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
-        image_count__gt=0
-    )
+    animals = Animal.objects.annotate(
+        image_count=Count("ibeximage", filter=Q(ibeximage__owner=request.user))
+    ).filter(image_count__gt=0)
     # get all images that are not linked to any animal
-    nr_unidentified_images = len(IbexImage.objects.filter(animal_id__isnull=True))
+    nr_unidentified_images = len(
+        IbexImage.objects.filter(animal_id__isnull=True, owner=request.user)
+    )
 
     return render(
         request,
@@ -564,7 +566,9 @@ def unidentified_images_view(request):
 
     else:
         # get all images that are not linked to any animal
-        unidentified_images = IbexImage.objects.filter(animal_id__isnull=True)
+        unidentified_images = IbexImage.objects.filter(
+            animal_id__isnull=True, owner=request.user
+        )
         return render(
             request,
             "core/unidentified_images.html",
