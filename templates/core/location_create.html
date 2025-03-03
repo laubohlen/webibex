@@ -95,6 +95,12 @@
             id="image-id"
             value="{{ image.id }}"
         />
+        <input
+            type="hidden"
+            name="postTaskReturn"
+            id="postTaskReturn"
+            value="{{ request.GET.next }}"
+        />
         <div class="w-full flex justify-end space-x-4 p-4">
             <span
                 id="lat-lng-display"

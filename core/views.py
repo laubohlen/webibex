@@ -410,7 +410,7 @@ def save_image_location(request):
             return multi_task_view(request)
         # if no next image, return where the user requested the task
         else:
-            return redirect("unidentified-images")
+            return redirect(request.POST.get("postTaskReturn"))
     pass
 
 
