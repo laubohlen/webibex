@@ -505,6 +505,8 @@ def image_update(request, oid):
     )
 
     if request.method == "POST":
+        if image.owner != request.user:
+            return HttpResponseForbidden("You are not allowed to edit this object.")
         side = request.POST.get("horn-side")
         image.side = side
         image.save()
@@ -528,6 +530,8 @@ def image_update(request, oid):
 def image_delete(request, oid):
     image = get_object_or_404(IbexImage, pk=oid)
     if request.method == "POST":
+        if image.owner != request.user:
+            return HttpResponseForbidden("You are not allowed to delete this object.")
         image.delete()
         print("image deleted")
         return redirect("images-overview")

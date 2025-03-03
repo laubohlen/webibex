@@ -7,7 +7,7 @@
                 src="{{ image.url }}"
                 alt="Large Image"
             />
-
+            {% if request.user == region.owner %}
             <div class="mt-4 flex justify-end space-x-4 self-end">
                 <a href="{% url 'delete-image' oid=image.id %}">
                     <button class="button !bg-red-500">Delete</button>
@@ -16,6 +16,7 @@
                     <button class="button !bg-gray-200 !text-black">Edit</button>
                 </a>
             </div>
+            {% endif %}
         </div>
         <!-- Right Column: File info, Location, and Small Image -->
         <div class="w-full md:w-2/5 flex flex-col items-start text-left">
