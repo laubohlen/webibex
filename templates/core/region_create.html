@@ -68,8 +68,20 @@
         />
 
         <div class="w-full flex justify-end space-x-4 p-4">
-            <a href="{% url 'region-overview' %}"><button class="button !bg-gray-200 !text-black">Cancel</button></a>
-            <button class="button ml-auto">Save</button>
+            <a href="{% url 'region-overview' %}"
+                ><button
+                    type="button"
+                    class="button !bg-gray-200 !text-black"
+                >
+                    Cancel
+                </button></a
+            >
+            <button
+                type="submit"
+                class="button ml-auto"
+            >
+                Save
+            </button>
         </div>
     </form>
 </div>
