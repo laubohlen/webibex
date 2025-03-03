@@ -363,6 +363,8 @@ def read_region(request, oid):
 def delete_region(request, oid):
     region = get_object_or_404(Region, pk=oid, owner=request.user)
     if request.method == "POST":
+        if region.owner != request.user:
+            return HttpResponseForbidden("You are not allowed to delete this object.")
         region.delete()
         return redirect("region-overview")
     return render(request, "core/region_delete.html", {"region": region})
