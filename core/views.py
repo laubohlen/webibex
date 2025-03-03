@@ -417,7 +417,13 @@ def save_image_location(request):
 @login_required
 def create_loaction(request, oid):
     image = get_object_or_404(IbexImage, id=oid)
+    # check if image has a location associated
     image_location = image.location
+    if not image_location:
+        init_location = Location.objects.create()
+        image.location = init_location
+        image.save()
+        image_location = image.location
     location_id = image_location.id
     # check if GPS is available, else return None
     if None in [image_location.latitude, image_location.longitude]:
