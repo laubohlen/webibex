@@ -1,7 +1,9 @@
 import numpy as np
 
 from django.conf import settings
+from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
+from django.core.exceptions import PermissionDenied
 from django.db.models.aggregates import Count
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
@@ -302,12 +304,10 @@ def save_region(request):
         if region_id:
             region = get_object_or_404(Region, pk=region_id, owner=request.user)
 
-            # Optionally, if the name is being changed, you can check for duplicates.
+            # Optionally, if the name is being changed, check for duplicates.
             if (
                 region.name != region_name
-                and Region.objects.filter(
-                    owner=request.user, name__iexact=region_name
-                ).exists()
+                and Region.objects.filter(name__iexact=region_name).exists()
             ):
                 print("Region name already exists")
                 return render(
@@ -327,9 +327,7 @@ def save_region(request):
 
         else:  # Otherwise, we're creating a new region.
             # check if region name already exists
-            if Region.objects.filter(
-                owner=request.user, name__iexact=region_name
-            ).exists():
+            if Region.objects.filter(name__iexact=region_name).exists():
                 print("Region name already exists")
                 return render(
                     request,
@@ -373,12 +371,15 @@ def delete_region(request, oid):
 @login_required
 def update_region(request, oid):
     region = get_object_or_404(Region, pk=oid)
+    if region.owner != request.user:
+        return HttpResponseForbidden("You are not allowed to edit this object.")
+
     return render(request, "core/region_update.html", {"region": region})
 
 
 @login_required
 def region_overview(request):
-    region_qs = Region.objects.filter(owner=request.user)
+    region_qs = Region.objects.all()
     return render(request, "core/region_overview.html", {"region_qs": region_qs})
 
 
