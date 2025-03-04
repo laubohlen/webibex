@@ -1,4 +1,4 @@
-{% extends 'layouts/empty.html' %} {% block content %}
+{% extends 'layouts/empty.html' %} {% load custom_template_tags %} {% block content %}
 <div class="max-w-screen-lg mx-auto">
     <div class="flex flex-col md:flex-row gap-4">
         <!-- Left Column: Large Image -->
@@ -12,7 +12,7 @@
                 <a href="{% url 'delete-image' oid=image.id %}">
                     <button class="button !bg-red-500">Delete</button>
                 </a>
-                <a href="{% url 'update-image' oid=image.id %}">
+                <a href="{% post_task_redirect 'update-image' oid=image.id %}">
                     <button class="button !bg-gray-200 !text-black">Edit</button>
                 </a>
             </div>
@@ -43,7 +43,11 @@
                 {% if image.location.region %}
                 <p>{{ image.location.region }}</p>
                 {% else %}
-                <button class="button">Set Location</button>
+                <a
+                    href="{% post_task_redirect 'locate-image' oid=image.id %}"
+                    class="button"
+                    >Set Location</a
+                >
                 {% endif %}
             </div>
             <!-- Horn Chip -->

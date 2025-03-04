@@ -1,4 +1,4 @@
-{% extends 'layouts/empty.html' %} {% block content %}
+{% extends 'layouts/empty.html' %} {% load custom_template_tags %} {% block content %}
 <div
     class="mx-auto flex flex-col items-center justify-center md:max-w-6xl"
     x-data="{ 
@@ -89,11 +89,11 @@
 
                     <!-- location column -->
                     {% if i.location.latitude %}
-                    <td><a href="{% url 'locate-image' oid=i.id %}">location</a></td>
+                    <td><a href="{% post_task_redirect 'locate-image' oid=i.id %}">{{ i.location.region }}</a></td>
                     {% else %}
                     <td>
                         <a
-                            href="{% url 'locate-image' oid=i.id %}"
+                            href="{% post_task_redirect 'locate-image' oid=i.id %}"
                             class="button"
                             >set</a
                         >
@@ -110,7 +110,7 @@
                         {% if i.side %}
                         <form
                             method="POST"
-                            action="{% url 'multi-task' %}"
+                            action="{% post_task_redirect 'multi-task' %}"
                             style="display: inline"
                         >
                             {% csrf_token %}

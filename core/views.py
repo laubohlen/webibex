@@ -406,11 +406,16 @@ def save_image_location(request):
         print(f"Location updated.")
 
         next_id_index = request.POST.get("next_id_index")
+        post_task_dst = request.POST.get("postTaskReturn")
+        print(post_task_dst)
         if next_id_index not in (None, "None"):
             return multi_task_view(request)
-        # if no next image, return where the user requested the task
+        # if no next image, try to return where the user requested the task
+        elif post_task_dst not in (None, "None", ""):
+            return redirect(post_task_dst)
         else:
-            return redirect(request.POST.get("postTaskReturn"))
+            return redirect("images-overview")
+
     pass
 
 

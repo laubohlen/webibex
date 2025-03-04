@@ -13,12 +13,12 @@ def dict_get(d, key):
 @register.simple_tag(takes_context=True)
 def post_task_redirect(context, viewname, *args, **kwargs):
     """
-    Returns a URL for a page with a next parameter set to the current URL.
-    Using the next parameter allows to redirect to the original URL after a task has been completed,
-    independent of where the task has been originated from.
+    Returns a URL for a page with a next parameter. If a next parameter already
+    exists in the current request, it is preserved to chain deeper redirects.
     """
-    url = reverse(viewname, args=args, kwargs=kwargs)
     request = context["request"]
-    next_param = request.get_full_path()
+    # If the next parameter already exists, preserve it; otherwise, use current URL
+    original_next = request.GET.get("next", request.get_full_path())
+    url = reverse(viewname, args=args, kwargs=kwargs)
     separator = "&" if "?" in url else "?"
-    return f"{url}{separator}{urlencode({'next': next_param})}"
+    return f"{url}{separator}{urlencode({'next': original_next})}"
