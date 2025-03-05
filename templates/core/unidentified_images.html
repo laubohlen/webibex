@@ -29,7 +29,7 @@
             </select>
             <form
                 method="POST"
-                action="{% url 'unidentified-images' %}"
+                action="{% post_task_redirect 'unidentified-images' %}"
             >
                 {% csrf_token %}
                 <!-- (Your tools dropdown and table go here) -->
@@ -110,7 +110,7 @@
                         {% if i.side %}
                         <form
                             method="POST"
-                            action="{% post_task_redirect 'multi-task' %}"
+                            action="{% url 'multi-task' %}"
                             style="display: inline"
                         >
                             {% csrf_token %}

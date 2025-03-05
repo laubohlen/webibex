@@ -1,4 +1,4 @@
-{% extends 'layouts/empty.html' %} {% load static %} {% block content %}
+{% extends 'layouts/empty.html' %} {% load custom_template_tags %} {% load static %} {% block content %}
 <div class="max-w-screen-md mx-auto p-4">
     <!-- No GPS available, choose region: -->
     <div>
@@ -87,7 +87,7 @@
 
 <form
     method="post"
-    action="{% url 'save-image-location' %}"
+    action="{% post_task_redirect 'save-image-location' %}"
     id="multi-location-form"
 >
     {% csrf_token %}

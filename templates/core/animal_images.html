@@ -23,7 +23,7 @@
                     {% else %}
                     <td>
                         <a
-                            href="{% url 'locate-image' oid=i.id %}"
+                            href="{% post_task_redirect 'locate-image' oid=i.id %}"
                             class="button"
                             >set</a
                         >

@@ -1,4 +1,4 @@
-{% extends 'layouts/empty.html' %} {% load static %} {% block content %}
+{% extends 'layouts/empty.html' %} {% load static %} {% load custom_template_tags %} {% block content %}
 <div class="max-w-screen-md mx-auto p-4">
     <!-- No GPS available, choose region: -->
     <div>
@@ -54,7 +54,7 @@
     <!-- Form to collect region and map values with a JS script -->
     <form
         method="post"
-        action="{% url 'save-image-location' %}"
+        action="{% post_task_redirect 'save-image-location' %}"
         id="location-form"
     >
         {% csrf_token %}
@@ -94,12 +94,6 @@
             name="image-id"
             id="image-id"
             value="{{ image.id }}"
-        />
-        <input
-            type="hidden"
-            name="postTaskReturn"
-            id="postTaskReturn"
-            value="{{ request.GET.next }}"
         />
         <div class="w-full flex justify-end space-x-4 p-4">
             <span
