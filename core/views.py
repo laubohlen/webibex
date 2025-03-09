@@ -30,7 +30,7 @@ def saved_animal_selection_view(request):
         img.animal = get_object_or_404(Animal, pk=oid)
         img.save()
         print("Saved selected animal to IbexImage.")
-        return redirect("images-overview")
+        return redirect("unidentified-images")
     else:
         # get all images of a specific animal
         images = IbexImage.objects.filter(animal_id=oid)
