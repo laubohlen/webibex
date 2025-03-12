@@ -64,6 +64,22 @@ def animal_images_view(request, oid):
 
 
 @login_required
+def animal_images_owner_view(request, oid):
+    # get all images of a specific animal
+    images = IbexImage.objects.filter(animal_id=oid, owner=request.user)
+    # in case images is empty, get the animal name
+    if not images:
+        animal_id_code = get_object_or_404(Animal, pk=oid).id_code
+    else:
+        animal_id_code = images.first().animal.id_code
+    return render(
+        request,
+        "core/animal_images_owner.html",
+        {"images": images, "animal_id_code": animal_id_code},
+    )
+
+
+@login_required
 def animals_overview(request):
     observed_animals = Animal.objects.annotate(image_count=Count("ibeximage")).filter(
         image_count__gt=0

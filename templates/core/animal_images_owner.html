@@ -1,0 +1,53 @@
+{% extends 'layouts/empty.html' %} {% load custom_template_tags %} {% block content %}
+<div class="mx-auto flex flex-col items-center justify-center md:max-w-6xl">
+    <div class="relative inline-block">
+        <table class="table-auto">
+            <h1>Ibex {{animal_id_code}}</h1>
+            {% if images %}
+            <thead class="[&>tr>th]:px-4 [&>tr>th]:py-2 [&>tr>th]:text-left">
+                <tr>
+                    <th>file_name</th>
+                    <th>side</th>
+                    <th>location</th>
+                    <th>chip</th>
+                    <th>action</th>
+                </tr>
+            </thead>
+            <tbody class="[&>tr>td]:border [&>tr>td]:px-4 [&>tr>td]:py-2">
+                {% for i in images %}
+                <tr>
+                    <td><a href="{% url 'read-image' oid=i.id %}">{{i.name}}</a></td>
+                    <td>{{i.side}}</td>
+                    {% if i.location.latitude %}
+                    <td><a href="{% post_task_redirect 'locate-image' oid=i.id %}">location</a></td>
+                    {% else %}
+                    <td>
+                        <a
+                            href="{% post_task_redirect 'locate-image' oid=i.id %}"
+                            class="button"
+                            >set</a
+                        >
+                    </td>
+                    {% endif %} {% if i.ibexchip.ibex_image_id %}
+                    <td><a href="{{ i.ibexchip.url }}">ok</a></td>
+                    <td>
+                        <a
+                            href="{% url 'result' oid=i.ibexchip.id %}"
+                            class="button"
+                            >id</a
+                        >
+                    </td>
+                    {% else %}
+                    <td>-</td>
+                    <td>-</td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% else %}
+            <p>No images of this ibex found.</p>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}

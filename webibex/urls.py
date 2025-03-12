@@ -40,6 +40,11 @@ urlpatterns = [
     re_path(r"^result/(?P<oid>[0-9]+)/$", show_result_view, name="result"),
     re_path(r"^run_again/(?P<oid>[0-9]+)/$", rerun_view, name="run-again"),
     re_path(r"^animal/(?P<oid>[0-9]+)/$", animal_images_view, name="animal"),
+    re_path(
+        r"^animal-own-images/(?P<oid>[0-9]+)/$",
+        animal_images_owner_view,
+        name="animal-own-images",
+    ),
     re_path(r"^new-ibex/(?P<oid>[0-9]+)/$", created_animal_view, name="new-ibex"),
     path(
         "updated-ibex-images/",

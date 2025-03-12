@@ -28,10 +28,10 @@
             </tr>
             {% for i in animals %}
             <tr>
-                <td><a href="{% url 'animal-own-images' oid=i.id %}">{{i.id_code}}</a></td>
+                <td><a href="{% url 'animal' oid=i.id %}">{{i.id_code}}</a></td>
                 <td>{{i.name}}</td>
                 <td>{{i.capture_date}}</td>
-                <td>{{i.image_count}}</td>
+                <td>{{i.ibeximage_set.count}}</td>
             </tr>
             {% endfor %}
         </tbody>
