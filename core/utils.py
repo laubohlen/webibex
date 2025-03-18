@@ -576,3 +576,26 @@ def id_color_mapping(gallery_and_distances):
                 len(id_to_color) % len(color_classes)
             ]
     return id_to_color
+
+
+def get_gallery(query_embedding, gallery_chips):
+    gallery_embeddings = Embedding.objects.filter(ibex_chip_id__in=gallery_chips)
+    # Extract all embedding vectors as a list of lists (or arrays)
+    gallery_vectors = [i.embedding for i in gallery_embeddings]
+    gallery_ids = [i.ibex_chip_id for i in gallery_embeddings]
+
+    # Convert the list of embedding vectors to a NumPy array
+    gallery_vectors_array = np.array(gallery_vectors)
+    distances = cdist_np(
+        np.array([query_embedding]), gallery_vectors_array, metric="euclidean"
+    )
+    distances = distances[0]
+    gallery_and_distances = zip(gallery_chips, distances)
+    # Sort the zipped list based on the distance (second element in each tuple)
+    sorted_gallery = sorted(gallery_and_distances, key=lambda x: x[1])
+    top5_sorted_gallery = sorted_gallery[:5]
+    # round distances
+    top5_sorted_gallery = [
+        (chip, round(distance, 2)) for chip, distance in top5_sorted_gallery
+    ]
+    return top5_sorted_gallery
