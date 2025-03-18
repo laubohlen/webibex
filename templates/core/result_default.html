@@ -4,15 +4,12 @@
     action="{% url 'saved-animal-selection' %}"
 >
     {% csrf_token %}
-    <div x-data="{ selectedAnimalId: null }">
+    <div x-data="{ selectedAnimalId: null, toggle: true, region: '' }">
         <div class="max-w-screen-lg mx-auto text-center">
             <div class="inline-block text-left">
-                <div
-                    class="flex flex-col items-start space-y-2 mb-4"
-                    x-data="{region: ''}"
-                >
+                <div class="flex flex-col items-start space-y-2 mb-4">
                     <div class="flex items-center space-x-2 mb-4">
-                        <p class="font-bold">Region:</p>
+                        <p class="font-bold">Project:</p>
                         <select
                             name="compare-options"
                             id="compare-options"
@@ -25,25 +22,35 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="flex items-center space-x-2 mb-4">
-                        <p x-show="region !== ''">Image selection:&nbsp;</p>
-                        <label class="!m-0 inline-flex items-center cursor-pointer space-x-2 leading-none">
+                    <div
+                        x-show="region !== ''"
+                        class="flex items-center space-x-2 mb-4"
+                    >
+                        <p>Image selection:&nbsp;</p>
+                        <label
+                            class="!m-0 inline-flex items-center cursor-pointer space-x-2 leading-none"
+                            x-model="toggle = !toggle"
+                        >
                             <span
-                                class="textBlueCustom leading-none"
+                                class="leading-none"
+                                :class="!toggle ? 'textBlueCustom' : 'text-black'"
                                 id="toggle-label"
-                                >Region</span
+                                >Project</span
                             >
 
                             <input
                                 type="checkbox"
                                 id="toggle-checkbox"
                                 class="hidden"
-                                checked
                             />
 
-                            <div class="w-10 h-6 bgBlueCustom rounded-full shadow-inner relative flex items-center">
-                                <div class="toggle-dot w-4 h-4 bg-white rounded-full shadow transform transition duration-300 left-1 top-1"></div>
+                            <div class="w-10 h-6 pl-1 bgBlueCustom rounded-full shadow-inner relative flex items-center">
+                                <div
+                                    class="toggle-dot w-4 h-4 bg-white rounded-full shadow transform transition duration-300 left-1 top-1"
+                                    :class="toggle ? 'translate-x-4' : 'translate-x-0'"
+                                ></div>
                             </div>
+                            <span :class="toggle ? 'textBlueCustom' : 'text-black'">Geographic</span>
                         </label>
                     </div>
                     <button
