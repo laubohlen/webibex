@@ -243,15 +243,17 @@ def default_chip_compare_view(request, oid):
 
 def project_chip_compare_view(request, oid):
     known_animals = Animal.objects.all()
-    regions = Region.objects.all()
-    region = request.POST.get("region")
+    region_id = int(request.POST.get("region"))
+    region = get_object_or_404(Region, id=region_id)
+    regions = Region.objects.exclude(id=region_id)
+    print("post:", request.POST.get("toggle"))
+    print(region_id, type(region_id))
     query = get_object_or_404(IbexChip, id=oid)
     query_embedding = query.embedding.embedding
     threshold_distance = 9.3
 
-    # comapre against images of specific region
-    gallery_chips = IbexChip.objects.filter(ibex_image__location__region=region)
-
+    # comapre against images of specific region 
+    gallery_chips = IbexChip.objects.filter(ibex_image__location__region_id=region_id, ibex_image__animal__isnull=False)
     if gallery_chips:
         top5_sorted_gallery = utils.get_gallery(query_embedding, gallery_chips)
         id_to_color = utils.id_color_mapping(top5_sorted_gallery)
@@ -268,6 +270,7 @@ def project_chip_compare_view(request, oid):
             "threshold": threshold_distance,
             "known_animals": known_animals,
             "id_to_color": id_to_color,
+            "region": region,
             "regions": regions,
         },
     )

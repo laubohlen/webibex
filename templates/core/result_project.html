@@ -1,5 +1,5 @@
 {% extends 'layouts/empty.html' %} {% block content %} {% load custom_template_tags %}
-<div x-data="{ selectedAnimalId: null, toggle: true, region: '' }">
+<div x-data="{ selectedAnimalId: null, toggle: true, region: {{ region.id }} }">
     <div class="max-w-screen-lg mx-auto text-center">
         <div class="inline-block text-left">
             <div class="flex flex-col items-start space-y-2 mb-4">
@@ -11,9 +11,9 @@
                         class="border p-1 rounded-md focus:ring-2 focus:ring-blue-500"
                         x-model="region"
                     >
-                        <option value="">All my images</option>
-                        {% for region in regions %}
-                        <option value="{{ region.id }}">{{ region.name }} - {{ region.owner }}</option>
+                        <option value="">{{ region.name }} - {{ region.owner }}</option>
+                        {% for i in regions %}
+                        <option value="{{ i.id }}">{{ i.name }} - {{ i.owner }}</option>
                         {% endfor %}
                     </select>
                 </div>
