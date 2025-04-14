@@ -242,12 +242,12 @@ def default_chip_compare_view(request, oid):
 
 
 def project_chip_compare_view(request, oid):
+    if request.POST.get("toggle") != "false":
+        return geographic_chip_compare_view(request, oid)
     known_animals = Animal.objects.all()
     region_id = int(request.POST.get("region"))
     region = get_object_or_404(Region, id=region_id)
     regions = Region.objects.exclude(id=region_id)
-    print("post:", request.POST.get("toggle"))
-    print(region_id, type(region_id))
     query = get_object_or_404(IbexChip, id=oid)
     query_embedding = query.embedding.embedding
     threshold_distance = 9.3
@@ -263,7 +263,57 @@ def project_chip_compare_view(request, oid):
 
     return render(
         request,
-        "core/result_project.html",
+        "core/result_refined.html",
+        {
+            "query_chip": query,
+            "gallery_and_distances": top5_sorted_gallery,
+            "threshold": threshold_distance,
+            "known_animals": known_animals,
+            "id_to_color": id_to_color,
+            "region": region,
+            "regions": regions,
+        },
+    )
+
+
+def geographic_chip_compare_view(request, oid):
+    known_animals = Animal.objects.all()
+    region_id = int(request.POST.get("region"))
+    region = get_object_or_404(Region, id=region_id)
+    regions = Region.objects.exclude(id=region_id)
+    query = get_object_or_404(IbexChip, id=oid)
+    query_embedding = query.embedding.embedding
+    threshold_distance = 9.3
+
+    # comapre against all images within a given radius
+    '''TODO: select overlapping regions and comapre against all those
+    animals. Problem: if a user arbitrarely creates a large region, like europe,
+    if would compare against all images in there which doesnt make much sense.
+    Solution 1: further subset by calculating actual distance, but keep in mind
+    that many images are located at the center of a region because the exact
+    location is unknown. Make sure to include those images as well, they are
+    marked as location.source=region
+    Solution 2: define a limit of max distance and don't include either regions
+    who have their center further away, or don't include images that are further
+    away'''
+
+    overlap_regions = utils.overlapping_regions(region, regions)
+    
+    gallery_chips = IbexChip.objects.filter(
+        ibex_image__animal__isnull=False).filter(
+            Q(ibex_image__location__region=region) | 
+            Q(ibex_image__location__region__in=overlap_regions)
+            )
+    if gallery_chips:
+        top5_sorted_gallery = utils.get_gallery(query_embedding, gallery_chips)
+        id_to_color = utils.id_color_mapping(top5_sorted_gallery)
+    else:
+        top5_sorted_gallery = []
+        id_to_color = {}
+
+    return render(
+        request,
+        "core/result_refined.html",
         {
             "query_chip": query,
             "gallery_and_distances": top5_sorted_gallery,
