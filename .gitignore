@@ -11,7 +11,7 @@ static/css/style.css
 static/css/style.min.css
 # core/embedding_model/
 prod/
-.prod_env/
+.venv_prod/
 .venv_dev/
 gcp_service_account_credentials.json
 
