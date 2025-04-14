@@ -18,8 +18,9 @@
                 <tr>
                     <td><a href="{% url 'read-image' oid=i.id %}">{{i.name}}</a></td>
                     <td>{{i.side}}</td>
+                    <!-- location column -->
                     {% if i.location.latitude %}
-                    <td><a href="{% post_task_redirect 'locate-image' oid=i.id %}">location</a></td>
+                    <td><a href="{% post_task_redirect 'locate-image' oid=i.id %}">{{ i.location.region }}</a></td>
                     {% else %}
                     <td>
                         <a
@@ -32,7 +33,7 @@
                     <td><a href="{{ i.ibexchip.url }}">ok</a></td>
                     <td>
                         <a
-                            href="{% url 'result' oid=i.ibexchip.id %}"
+                            href="{% url 'result-default' oid=i.ibexchip.id %}"
                             class="button"
                             >id</a
                         >

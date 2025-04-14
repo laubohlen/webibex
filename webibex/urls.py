@@ -37,7 +37,16 @@ urlpatterns = [
     path("animals/", animals_overview, name="animals"),
     path("unidentified/", unidentified_images_view, name="unidentified-images"),
     path("results/", results_over_view, name="results-overview"),
-    re_path(r"^result/(?P<oid>[0-9]+)/$", show_result_view, name="result"),
+    re_path(
+        r"^result_default/(?P<oid>[0-9]+)/$",
+        default_chip_compare_view,
+        name="result-default",
+    ),
+    re_path(
+        r"^result_refined/(?P<oid>[0-9]+)/$",
+        project_chip_compare_view,
+        name="result-refined",
+    ),
     re_path(r"^run_again/(?P<oid>[0-9]+)/$", rerun_view, name="run-again"),
     re_path(r"^animal/(?P<oid>[0-9]+)/$", animal_images_view, name="animal"),
     re_path(
