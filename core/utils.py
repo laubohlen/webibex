@@ -20,6 +20,7 @@ from PIL import Image
 from environ import Env
 from pathlib import Path
 from urllib.parse import urlparse
+from geopy.distance import distance
 
 from . import b2_utils
 
@@ -599,3 +600,28 @@ def get_gallery(query_embedding, gallery_chips):
         (chip, round(distance, 2)) for chip, distance in top5_sorted_gallery
     ]
     return top5_sorted_gallery
+
+
+def overlapping_regions(single_region, regions_qs):
+    """
+    Given a single region and a queryset of regions,
+    return a list of regions that overlap with the single region.
+
+    Overlap is defined as when the distance between centers is less than the sum of the radii.
+    """
+    overlaps = []
+    for region in regions_qs:
+        # Ensure both regions have valid coordinates and radii.
+        if (single_region.origin_latitude is None or single_region.origin_longitude is None or single_region.radius is None or
+            region.origin_latitude is None or region.origin_longitude is None or region.radius is None):
+            continue
+
+        center_single = (single_region.origin_latitude, single_region.origin_longitude)
+        center_other = (region.origin_latitude, region.origin_longitude)
+        dist = distance(center_single, center_other).meters
+
+        # Check if the regions overlap.
+        if dist < (single_region.radius + region.radius):
+            overlaps.append(region)
+
+    return overlaps
