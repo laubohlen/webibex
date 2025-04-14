@@ -2,7 +2,9 @@ asgiref==3.8.1
 awscrt==0.23.8
 boto3==1.37.33
 botocore==1.37.33
+certifi==2025.1.31
 chardet==5.2.0
+charset-normalizer==3.4.1
 cssselect2==0.8.0
 dj-database-url==2.3.0
 Django==5.0.14
@@ -15,6 +17,7 @@ easy-thumbnails==2.10
 geographiclib==2.0
 geopy==2.4.1
 gunicorn==23.0.0
+idna==3.10
 jmespath==1.0.1
 lxml==5.3.2
 numpy==2.2.4
@@ -26,6 +29,7 @@ pip==25.0.1
 psycopg2-binary==2.9.10
 python-dateutil==2.9.0.post0
 reportlab==4.3.1
+requests==2.32.3
 s3transfer==0.11.4
 setuptools==78.1.0
 six==1.17.0
