@@ -13,3 +13,4 @@ gunicorn # wsgi instead of manage.py runserver
 setuptools
 boto3[crt]
 django-storages[s3]
+geopy
