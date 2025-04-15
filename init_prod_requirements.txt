@@ -9,7 +9,7 @@ dj-database-url # lets django connect to postgres db
 psycopg2-binary # lets django talk to postgres db
 gunicorn # wsgi instead of manage.py runserver
 setuptools
-boto3[crt]
+boto3[crt]==1.26.0 # avoids x-amz-checksum-algorithm which backblaze doesnt support
 django-storages[s3]
 geopy
 requests
