@@ -694,7 +694,9 @@ def image_upload(request):
         upload_folder = Folder.objects.get(
             name=f"{request.user.username}_files", owner=request.user
         )
-
+        print("files:", files)
+        print("side:", side)
+        print("folder:", upload_folder)
         for f in files:
             IbexImage.objects.create(
                 original_filename=f.name,
