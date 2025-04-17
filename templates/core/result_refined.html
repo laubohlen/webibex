@@ -55,9 +55,14 @@
                     class="button !bg-blue-500"
                     x-bind:disabled="region.length === 0"
                 >
-                    &gt;
+                    Compare
                 </button>
             </div>
+            {% if n_regions %}
+            <p>Compared with: {{ n_gallery_chips }} horns from {{ n_regions }} overlaping regions</p>
+            {% else %}
+            <p>Compared with: {{ n_gallery_chips }} horns from region {{ region.name }}</p>
+            {% endif %}
             <p>Select the matching horn:</p>
             <div class="mt-4 flex items-center justify-center grid-cols-[{{ gallery_chips|length }}] gap-[{{ gallery_chips|length }}]">
                 <!-- show query image on the left side -->
