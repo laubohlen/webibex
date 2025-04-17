@@ -232,8 +232,16 @@ def default_chip_compare_view(request, oid):
     threshold_distance = 9.3
 
     # compare against all images of the current user
-    gallery_chips = IbexChip.objects.filter(
+    gallery_chips = IbexChip.objects.select_related(
+        'ibex_image__location__region'
+    ).filter(
         ibex_image__owner=request.user, ibex_image__animal__isnull=False
+    )
+    n_gallery_chips = gallery_chips.count()
+    n_regions = (
+        Region.objects.filter(
+            location__ibeximage__ibexchip__in=gallery_chips
+        ).distinct().count()
     )
 
     if gallery_chips:
@@ -253,6 +261,8 @@ def default_chip_compare_view(request, oid):
             "known_animals": known_animals,
             "id_to_color": id_to_color,
             "regions": regions,
+            "n_gallery_chips": n_gallery_chips,
+            "n_regions": n_regions,
         },
     )
 
@@ -270,6 +280,9 @@ def project_chip_compare_view(request, oid):
 
     # comapre against images of specific region 
     gallery_chips = IbexChip.objects.filter(ibex_image__location__region_id=region_id, ibex_image__animal__isnull=False)
+    
+    n_gallery_chips = gallery_chips.count()
+    
     if gallery_chips:
         top5_sorted_gallery = utils.get_gallery(query_embedding, gallery_chips)
         id_to_color = utils.id_color_mapping(top5_sorted_gallery)
@@ -288,6 +301,7 @@ def project_chip_compare_view(request, oid):
             "id_to_color": id_to_color,
             "region": region,
             "regions": regions,
+            "n_gallery_chips": n_gallery_chips,
         },
     )
 
@@ -301,25 +315,23 @@ def geographic_chip_compare_view(request, oid):
     query_embedding = query.embedding.embedding
     threshold_distance = 9.3
 
-    # comapre against all images within a given radius
-    '''TODO: select overlapping regions and comapre against all those
-    animals. Problem: if a user arbitrarely creates a large region, like europe,
-    if would compare against all images in there which doesnt make much sense.
-    Solution 1: further subset by calculating actual distance, but keep in mind
-    that many images are located at the center of a region because the exact
-    location is unknown. Make sure to include those images as well, they are
-    marked as location.source=region
-    Solution 2: define a limit of max distance and don't include either regions
-    who have their center further away, or don't include images that are further
-    away'''
-
     overlap_regions = utils.overlapping_regions(region, regions)
     
-    gallery_chips = IbexChip.objects.filter(
+    gallery_chips = IbexChip.objects.select_related(
+        'ibex_image__location__region'
+    ).filter(
         ibex_image__animal__isnull=False).filter(
             Q(ibex_image__location__region=region) | 
             Q(ibex_image__location__region__in=overlap_regions)
             )
+    
+    n_gallery_chips = gallery_chips.count()
+    n_regions = (
+        Region.objects.filter(
+            location__ibeximage__ibexchip__in=gallery_chips
+        ).distinct().count()
+    )
+
     if gallery_chips:
         top5_sorted_gallery = utils.get_gallery(query_embedding, gallery_chips)
         id_to_color = utils.id_color_mapping(top5_sorted_gallery)
@@ -338,6 +350,8 @@ def geographic_chip_compare_view(request, oid):
             "id_to_color": id_to_color,
             "region": region,
             "regions": regions,
+            "n_gallery_chips": n_gallery_chips,
+            "n_regions": n_regions,
         },
     )
 
