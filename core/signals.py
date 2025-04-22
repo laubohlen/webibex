@@ -125,7 +125,7 @@ def extract_gps_coords(filer_image):
 
 
 @receiver(post_save, sender=IbexImage)
-def rename_uploaded_image(sender, instance, created, **kwargs):
+def process_uploaded_image(sender, instance, created, **kwargs):
     image = instance
     location_id = "PNGP"
     unmarked_code = "---"
@@ -133,17 +133,17 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
     if created:
         _, file_extenstion = os.path.splitext(image.file.name)
         if image.exif:  # no exif results in empty dictionary which bool(dict) == False
-            created = image.exif["DateTime"]  # format: 2021:06:24 17:48:11
-            created = datetime.datetime.strptime(str(created), "%Y:%m:%d %H:%M:%S")
-            created = created.strftime("%y_%m_%d_%H%M%S")
+            createtime = image.exif["DateTime"]  # format: 2021:06:24 17:48:11
+            createtime = datetime.datetime.strptime(str(createtime), "%Y:%m:%d %H:%M:%S")
+            createtime = createtime.strftime("%y_%m_%d_%H%M%S")
 
             # orientation = image.exif["Orientation"]  # 1 = horizontal, ?? = portrait
             # gps_info = image.exif["GPSInfo"]
         else:  # no exif data
-            created = "noexifdata"
+            createtime = "noexifdata"
 
         new_filename = "{}{}_{}_{}{}".format(
-            location_id, season, unmarked_code, created, file_extenstion
+            location_id, season, unmarked_code, createtime, file_extenstion
         )
         image.name = get_valid_filename_django(new_filename)
 
@@ -154,8 +154,6 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
             image.side = "R"
         elif image.folder.name == "_other_upload":
             image.side = "O"
-
-        image.save()
 
         # extract location from exif if available
         if image.exif:  # no exif results in empty dictionary which bool(dict) == False
@@ -178,6 +176,13 @@ def rename_uploaded_image(sender, instance, created, **kwargs):
             image.location.longitude = longitude
         print("Created location object for image")
 
+        # save "created_at" datetime for image
+        if isinstance(image.exif["DateTime"], datetime): # Check if it's a datetime object
+            image.created_at = image.exif["DateTime"]
+            print("Updated file created_at field")
+        else:
+            image.created_at = datetime.now()
+        
         # Save the image to update the relationship, if needed
         image.save()
 
