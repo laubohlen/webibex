@@ -89,6 +89,11 @@ class IbexImage(FilerBaseImage):
     location = models.OneToOneField(
         Location, on_delete=models.SET_NULL, null=True, blank=True
     )
+    created_at = models.DateTimeField(
+        _("created at"),
+        auto_now_add=True, # initialise population of the field, then change to file creation datetime
+        null=True,
+    )
 
     class Meta(FilerBaseImage.Meta):
         # You must define a meta with en explicit app_label
