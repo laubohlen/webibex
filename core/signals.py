@@ -133,12 +133,18 @@ def process_uploaded_image(sender, instance, created, **kwargs):
     if created:
         _, file_extenstion = os.path.splitext(image.file.name)
         if image.exif:  # no exif results in empty dictionary which bool(dict) == False
-            createtime = image.exif["DateTime"]  # format: 2021:06:24 17:48:11
-            createtime = datetime.datetime.strptime(str(createtime), "%Y:%m:%d %H:%M:%S")
-            createtime = createtime.strftime("%y_%m_%d_%H%M%S")
+            createtime = image.exif.get("DateTime", None) # format: 2021:06:24 17:48:11
+        
+            if isinstance(createtime, str):
+                createtime = datetime.datetime.strptime(str(createtime), "%Y:%m:%d %H:%M:%S")
+                createtime = createtime.strftime("%y_%m_%d_%H%M%S")
+            
+            else:  # empty exif datetime
+                createtime = "noexifdata"
 
             # orientation = image.exif["Orientation"]  # 1 = horizontal, ?? = portrait
             # gps_info = image.exif["GPSInfo"]
+
         else:  # no exif data
             createtime = "noexifdata"
 
@@ -177,11 +183,16 @@ def process_uploaded_image(sender, instance, created, **kwargs):
         print("Created location object for image")
 
         # save "created_at" datetime for image
-        if isinstance(image.exif["DateTime"], datetime): # Check if it's a datetime object
-            image.created_at = image.exif["DateTime"]
-            print("Updated file created_at field")
+        dt = image.exif.get("DateTime", None)
+        if isinstance(dt, str):
+            dt_object = datetime.datetime.strptime(dt, "%Y:%m:%d %H:%M:%S")
+            if isinstance(dt_object, datetime.datetime): # Check if it's a datetime object
+                image.created_at = dt_object
+                print("Updated file created_at field")
+            else:
+                image.created_at = datetime.datetime.now()
         else:
-            image.created_at = datetime.now()
+            image.created_at = datetime.datetime.now()
         
         # Save the image to update the relationship, if needed
         image.save()
