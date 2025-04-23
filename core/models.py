@@ -91,7 +91,7 @@ class IbexImage(FilerBaseImage):
     )
     created_at = models.DateTimeField(
         _("created at"),
-        auto_now_add=True, # initialise population of the field, then change to file creation datetime
+        auto_now_add=True, # initialise with value, then change to file creation datetime in signal
         null=True,
     )
 
