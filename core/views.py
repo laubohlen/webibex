@@ -228,10 +228,20 @@ def project_chip_compare_view(request, oid):
     regions = Region.objects.exclude(id=region_id)
     query = get_object_or_404(IbexChip, id=oid)
     query_embedding = query.embedding.embedding
+    query_season = query.ibex_image.created_at.year
     threshold_distance = 9.3
 
     # comapre against images of specific region 
-    gallery_chips = IbexChip.objects.filter(ibex_image__location__region_id=region_id, ibex_image__animal__isnull=False)
+    gallery_chips = IbexChip.objects.select_related(
+        'ibex_image__location__region'
+    ).annotate(
+        image_year=ExtractYear('ibex_image__created_at')
+    ).filter(
+        ibex_image__location__region_id=region_id,
+        ibex_image__animal__isnull=False,
+        image_year__gte=query_season - 2,
+        image_year__lte=query_season + 2,
+    )
     
     n_gallery_chips = gallery_chips.count()
     
@@ -271,6 +281,8 @@ def geographic_chip_compare_view(request, oid):
     
     gallery_chips = IbexChip.objects.select_related(
         'ibex_image__location__region'
+    ).annotate(
+        image_year=ExtractYear('ibex_image__created_at')
     ).filter(
         ibex_image__animal__isnull=False).filter(
             Q(ibex_image__location__region=region) | 
