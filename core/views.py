@@ -5,6 +5,7 @@ from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q
+from django.db.models.functions import ExtractYear
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 
@@ -174,13 +175,19 @@ def default_chip_compare_view(request, oid):
     regions = Region.objects.all()
     query = get_object_or_404(IbexChip, id=oid)
     query_embedding = query.embedding.embedding
+    query_season = query.ibex_image.created_at.year
     threshold_distance = 9.3
 
-    # compare against all images of the current user
+    # compare against all images of the current user with a range of [-2, +2 years]
     gallery_chips = IbexChip.objects.select_related(
         'ibex_image__location__region'
+    ).annotate(
+        image_year=ExtractYear('ibex_image__created_at')
     ).filter(
-        ibex_image__owner=request.user, ibex_image__animal__isnull=False
+        ibex_image__owner=request.user,
+        ibex_image__animal__isnull=False, 
+        image_year__gte=query_season - 2,
+        image_year__lte=query_season + 2,
     )
     n_gallery_chips = gallery_chips.count()
     n_regions = (
