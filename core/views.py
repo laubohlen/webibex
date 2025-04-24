@@ -21,7 +21,7 @@ def welcome_view(request):
 
 @login_required
 def saved_animal_selection_view(request):
-    # catching forms from selecting animal in show_result_view
+    # catching forms from selecting animal in chip compare views
     if request.method == "POST":
         oid = request.POST.get("selectedAnimalId")
         query_chip_id = request.POST.get("query_chip_id")
@@ -166,61 +166,6 @@ def results_over_view(request):
         request,
         "core/results_overview.html",
         {"images": identified_images},
-    )
-
-
-def show_result_view(request, oid):
-    query = get_object_or_404(IbexChip, id=oid)
-    query_embedding = query.embedding.embedding
-
-    # query chips of all previously known animals:
-    # Step 1: Filter Animals that have related IbexImages
-    # The distinct() call ensures that each Animal is only returned once, even if they have multiple images.
-    animals_with_images = Animal.objects.filter(ibeximage__isnull=False).distinct()
-
-    # Step 2: Query IbexChips related to those animals via the IbexImage model
-    gallery_chips = IbexChip.objects.filter(ibex_image__animal__in=animals_with_images)
-
-    known_animals = Animal.objects.all()
-    if gallery_chips:
-        gallery_embeddings = Embedding.objects.filter(ibex_chip_id__in=gallery_chips)
-        # Extract all embedding vectors as a list of lists (or arrays)
-        gallery_vectors = [i.embedding for i in gallery_embeddings]
-        gallery_ids = [i.ibex_chip_id for i in gallery_embeddings]
-
-        # Convert the list of embedding vectors to a NumPy array
-        gallery_vectors_array = np.array(gallery_vectors)
-        distances = utils.cdist_np(
-            np.array([query_embedding]), gallery_vectors_array, metric="euclidean"
-        )
-        distances = distances[0]
-        gallery_and_distances = zip(gallery_chips, distances)
-        # Sort the zipped list based on the distance (second element in each tuple)
-        sorted_gallery = sorted(gallery_and_distances, key=lambda x: x[1])
-        top5_sorted_gallery = sorted_gallery[:5]
-        # round distances
-        top5_sorted_gallery = [
-            (chip, round(distance, 2)) for chip, distance in top5_sorted_gallery
-        ]
-
-    else:
-        top5_sorted_gallery = []
-
-    threshold_distance = 9.3
-
-    id_to_color = utils.id_color_mapping(top5_sorted_gallery)
-    print(id_to_color)
-
-    return render(
-        request,
-        "core/result.html",
-        {
-            "query_chip": query,
-            "gallery_and_distances": top5_sorted_gallery,
-            "threshold": threshold_distance,
-            "known_animals": known_animals,
-            "id_to_color": id_to_color,
-        },
     )
 
 
