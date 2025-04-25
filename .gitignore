@@ -4,6 +4,8 @@
 Dockerfile
 fly.toml
 debug.ipynb
+pg-data.json
+*.sqlite3
 
 webibex.code-workspace
 node/node_modules
