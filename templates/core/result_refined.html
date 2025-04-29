@@ -61,7 +61,7 @@
             {% if n_regions %}
             <p>Compared with: {{ n_gallery_chips }} horns from {{ n_regions }} overlaping regions</p>
             {% else %}
-            <p>Compared with: {{ n_gallery_chips }} horns from region {{ region.name }}</p>
+            <p>Compared with: {{ n_gallery_chips }} horns from {{ region.name }} region</p>
             {% endif %}
             <p>Select the matching horn:</p>
             <div class="mt-4 flex items-center justify-center grid-cols-[{{ gallery_chips|length }}] gap-[{{ gallery_chips|length }}]">
