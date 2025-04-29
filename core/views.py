@@ -4,7 +4,7 @@ from django.conf import settings
 from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Case, When
 from django.db.models.functions import ExtractYear
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
@@ -169,8 +169,11 @@ def results_over_view(request):
         {"images": identified_images},
     )
 
-
+import time
 def default_chip_compare_view(request, oid):
+    """
+    Compare query against all images of the user with a range of [-2, +2 years]
+    """
     known_animals = Animal.objects.all()
     regions = Region.objects.all()
     query = get_object_or_404(IbexChip, id=oid)
@@ -178,37 +181,76 @@ def default_chip_compare_view(request, oid):
     query_season = query.ibex_image.created_at.year
     threshold_distance = 9.3
 
-    # compare against all images of the current user with a range of [-2, +2 years]
-    gallery_chips = IbexChip.objects.select_related(
-        'ibex_image__location__region'
-    ).annotate(
-        image_year=ExtractYear('ibex_image__created_at')
-    ).filter(
-        ibex_image__owner=request.user,
-        ibex_image__animal__isnull=False, 
-        image_year__gte=query_season - 2,
-        image_year__lte=query_season + 2,
+    # build base queryset
+    gallery_qs = (
+        IbexChip.objects
+        .select_related(
+            'ibex_image__location__region',
+            'embedding',
+        )
+        .annotate(
+            image_year=ExtractYear('ibex_image__created_at')
+        )
+        .filter(
+            ibex_image__owner=request.user,
+            ibex_image__animal__isnull=False,
+            image_year__gte=query_season - 2,
+            image_year__lte=query_season + 2,
+        )
     )
-    n_gallery_chips = gallery_chips.count()
+
+    n_gallery_chips = gallery_qs.count()
+
     n_regions = (
         Region.objects.filter(
-            location__ibeximage__ibexchip__in=gallery_chips
+            location__ibeximage__ibexchip__in=gallery_qs
         ).distinct().count()
     )
 
-    if gallery_chips:
-        top5_sorted_gallery = utils.get_gallery(query_embedding, gallery_chips)
-        id_to_color = utils.id_color_mapping(top5_sorted_gallery)
-    else:
-        top5_sorted_gallery = []
+    # only use id and embedding for distance computation and sorting
+    id_and_vec = list(gallery_qs.values_list('id', 'embedding__embedding'))
+    if not id_and_vec:
+        top5 = []
         id_to_color = {}
+    else:
+        # unzip into two parallel lists
+        ids, vecs = zip(*id_and_vec)
+        gallery_vectors = np.stack(vecs)                       # (N, D)
+        diffs           = gallery_vectors - query_embedding    # (N, D)
+        dists           = np.linalg.norm(diffs, axis=1)        # (N,)
+        
+        # get indices of the 5 smallest
+        top_idx = np.argsort(dists)[:5]
+        top_ids = [ids[i] for i in top_idx]
+        top_dists = [round(float(dists[i]), 2) for i in top_idx]
+
+        preserved_order = Case(
+                *[When(pk=pk, then=pos) for pos, pk in enumerate(top_ids)]
+            )
+        
+        # query full entries of the top 5 chips only
+        top_chips = list(
+            IbexChip.objects
+            .filter(pk__in=top_ids)
+            .select_related(
+                'ibex_image__location__region',
+                'embedding',
+            )
+            .order_by(preserved_order)
+        )
+
+        # pair lists back up
+        top5 = list(zip(top_chips, top_dists))
+
+        # map ids to different colors for clearer output
+        id_to_color = utils.id_color_mapping(top5)
 
     return render(
         request,
         "core/result_default.html",
         {
             "query_chip": query,
-            "gallery_and_distances": top5_sorted_gallery,
+            "gallery_and_distances": top5,
             "threshold": threshold_distance,
             "known_animals": known_animals,
             "id_to_color": id_to_color,
