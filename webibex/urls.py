@@ -21,8 +21,8 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from core.views import *
 
-admin.site.site_header = "Webibex"
 
+admin.site.site_header = "Webibex"
 
 urlpatterns = [
     path("webibex/", admin.site.urls),
@@ -80,3 +80,9 @@ if settings.DEBUG:
     urlpatterns += [path("test/", test_view, name="test")]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    try:    
+        from debug_toolbar.toolbar import debug_toolbar_urls
+        urlpatterns += debug_toolbar_urls()
+    except ImportError:
+        print("ImportError Debug toolbar")
+    

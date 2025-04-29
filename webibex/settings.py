@@ -87,6 +87,8 @@ MIDDLEWARE = [
 
 # disable browser caching
 if DEBUG == True:
+    INSTALLED_APPS += ["debug_toolbar"]
+    MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
     MIDDLEWARE += ["django.middleware.cache.FetchFromCacheMiddleware"]
     CACHE_MIDDLEWARE_SECONDS = 0
 
