@@ -194,8 +194,8 @@ def default_chip_compare_view(request, oid):
         .filter(
             ibex_image__owner=request.user,
             ibex_image__animal__isnull=False,
-            image_year__gte=query_season - 3,
-            image_year__lte=query_season + 3,
+            image_year__gte=query_season - 4,
+            image_year__lte=query_season + 4,
         )
     )
 
@@ -283,8 +283,8 @@ def project_chip_compare_view(request, oid):
     ).filter(
         ibex_image__location__region_id=region_id,
         ibex_image__animal__isnull=False,
-        image_year__gte=query_season - 3,
-        image_year__lte=query_season + 3,
+        image_year__gte=query_season - 4,
+        image_year__lte=query_season + 4,
     )
     
     n_gallery_chips = gallery_qs.count()
@@ -367,8 +367,8 @@ def geographic_chip_compare_view(request, oid):
         ibex_image__animal__isnull=False).filter(
             Q(ibex_image__location__region=region) | 
             Q(ibex_image__location__region__in=overlap_regions),
-            image_year__gte=query_season - 3,
-            image_year__lte=query_season + 3,
+            image_year__gte=query_season - 4,
+            image_year__lte=query_season + 4,
             )
     
     n_gallery_chips = gallery_qs.count()
