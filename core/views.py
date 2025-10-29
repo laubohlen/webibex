@@ -100,14 +100,17 @@ def animals_overview(request):
 
 def save_landmarks_view(request):
     if request.method == "POST":
+
+        print(request.POST)
+
         image_id = request.POST.get("image-id")
         image = get_object_or_404(IbexImage, id=image_id)
 
         # get landmarks relative to displayed image size
-        x_horn_scaled = int(request.POST.get("horn_x"))
-        y_horn_scaled = int(request.POST.get("horn_y"))
-        x_eye_scaled = int(request.POST.get("eye_x"))
-        y_eye_scaled = int(request.POST.get("eye_y"))
+        x_horn_scaled = int(request.POST.get("horn_x"), 1)
+        y_horn_scaled = int(request.POST.get("horn_y"), 1)
+        x_eye_scaled = int(request.POST.get("eye_x"), 1)
+        y_eye_scaled = int(request.POST.get("eye_y"), 1)
 
         # calculate landmark back relative to original image size
         x_horn, y_horn = utils.scale_coordinate(
