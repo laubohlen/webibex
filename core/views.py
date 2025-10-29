@@ -101,8 +101,6 @@ def animals_overview(request):
 def save_landmarks_view(request):
     if request.method == "POST":
 
-        print(request.POST)
-
         image_id = request.POST.get("image-id")
         image = get_object_or_404(IbexImage, id=image_id)
 
