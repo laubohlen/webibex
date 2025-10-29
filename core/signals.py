@@ -4,7 +4,7 @@ import datetime
 from django.dispatch import receiver
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.utils.encoding import force_str
-from django.utils.timezone import now
+from django.utils import timezone
 from django.utils.text import get_valid_filename as get_valid_filename_django
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
@@ -129,7 +129,7 @@ def process_uploaded_image(sender, instance, created, **kwargs):
     image = instance
     location_id = "PNGP"
     unmarked_code = "---"
-    season = force_str(now().strftime("%y"))
+    season = force_str(timezone.now().strftime("%y"))
     if created:
         _, file_extenstion = os.path.splitext(image.file.name)
         if image.exif:  # no exif results in empty dictionary which bool(dict) == False
@@ -187,12 +187,12 @@ def process_uploaded_image(sender, instance, created, **kwargs):
         if isinstance(dt, str):
             dt_object = datetime.datetime.strptime(dt, "%Y:%m:%d %H:%M:%S")
             if isinstance(dt_object, datetime.datetime): # Check if it's a datetime object
-                image.created_at = dt_object
+                image.created_at = timezone.make_aware(dt_object)
                 print("Updated file created_at field")
             else:
-                image.created_at = datetime.datetime.now()
+                image.created_at = timezone.now()
         else:
-            image.created_at = datetime.datetime.now()
+            image.created_at = timezone.now()
         
         # Save the image to update the relationship, if needed
         image.save()
