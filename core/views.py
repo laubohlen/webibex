@@ -107,10 +107,10 @@ def save_landmarks_view(request):
         image = get_object_or_404(IbexImage, id=image_id)
 
         # get landmarks relative to displayed image size
-        x_horn_scaled = int(request.POST.get("horn_x"))
-        y_horn_scaled = int(request.POST.get("horn_y"))
-        x_eye_scaled = int(request.POST.get("eye_x"))
-        y_eye_scaled = int(request.POST.get("eye_y"))
+        x_horn_scaled = round(float(request.POST.get("horn_x")))
+        y_horn_scaled = round(float(request.POST.get("horn_y")))
+        x_eye_scaled = round(float(request.POST.get("eye_x")))
+        y_eye_scaled = round(float(request.POST.get("eye_y")))
 
         # calculate landmark back relative to original image size
         x_horn, y_horn = utils.scale_coordinate(
