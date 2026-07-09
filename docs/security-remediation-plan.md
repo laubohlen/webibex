@@ -95,16 +95,49 @@ existing threshold), not new architecture.
 | Task | Estimate | Notes |
 |---|---|---|
 | dcg profile fix | done | already merged to main |
-| Routine CVE bumps (Django, pillow, django-allauth, django-filer, requests, lxml) | ~2.75d | standard version bumps + regression check |
+| Routine CVE bumps (Django, pillow, django-allauth, django-filer, requests, lxml, setuptools) | ~2.75d | standard version bumps + regression check — see expanded CVE list below (2026-07-08 audit) |
 | boto3/botocore/urllib3 triangle | ~1.5-2.5d | **blocked on B2 test bucket** — verify `x-amz-checksum-algorithm` compatibility before bump |
-| TensorFlow removal | ~0.5d | delete local-dev branches + `core/test_model.py`; leave RunPod path untouched |
-| JS build-tooling cleanup | ~0.25d | `npm audit fix` scope, build-time only |
+| TensorFlow removal | ~0.5d | **deferred to 2026-07-17** — user talking to original developer (Lauren) first; see below |
+| JS build-tooling cleanup | ~0.25d | `npm audit fix` scope, build-time only; also fix `node/package.json` caret ranges (`^3.4.6`, `^5.6.3`) → exact pins |
 | Minimal CI scaffold | ~1-1.5d | repo currently has zero CI |
 
-**Status**: plan approved by user 2026-07-07, not yet executed.
+**Status**: plan approved by user 2026-07-07; execution batch starting 2026-07-08.
+TensorFlow removal excluded from this batch (see below). **CI scaffold also excluded from
+this batch as of 2026-07-08** — user wants to ask Lauren about deploy-workflow history
+first (Fly.io→Railway switch caveats) and whether a GitHub→GitLab repo move is actually
+planned before building GitHub Actions CI that might need redoing. Current batch is now:
+Python CVE bumps (Task 2) + JS pin cleanup (Task 3) + `init_prod_requirements.txt` sync
+(Task 4), verified **locally** (pip-audit/OSV clean + manual `manage.py check`/`migrate`/
+`test` + manual smoke-test checklist) instead of via a CI gate. User plans to update
+dependencies locally now and push to a repo (GitHub or a GitLab clone, TBD) later.
 
 **Open blocker**: B2 test-bucket provisioning — needed before the boto3/botocore/urllib3
 triangle task can start.
+
+**TensorFlow removal deferred**: user will talk to the original developer (Lauren,
+`laubohlen/webibex`) on 2026-07-17 about both this task's scope and the separate
+RunPod-access request (needed for the TF2 embedding-model swap, see session notes
+2026-07-08). TF-removal excluded from the current batch until after that conversation.
+
+### Expanded CVE findings (2026-07-08 `/supply-chain` audit, OSV + socket.dev)
+
+Cross-checked with real OSV batch API + socket.dev behavioral scan data (not simulated).
+Found more than the 2026-07-07 snapshot — newly disclosed in the intervening day:
+
+| Package | Pinned | Fix target | Severity | Notes |
+|---|---|---|---|---|
+| `Django` | 5.0.14 | 5.2 LTS (5.0.x has **no** fixed version — not EOL-backported) | **CRITICAL** (socket.dev reclass; OSV CVSS 7.5) | SQL injection via `_connector` kwarg (GHSA-frmv-pr5f-9mcr) + 3 more |
+| `pillow` | 11.2.1 | likely 12.x, not same-major patch — confirm before bump | MAJOR | most of 9 advisories fixed only in 12.1.1/12.2.0 |
+| `django-allauth` | 65.7.0 | ≥65.14.1 | MAJOR | 6 advisories, 2 open-redirect + 3 IdP identity issues |
+| `lxml` | 5.3.2 | ≥6.1.0 | MAJOR | **new** — XXE via default `iterparse()` config (CVSS 7.5) |
+| `requests` | 2.32.3 | ≥2.32.4 (one patch) | MAJOR | **new** — `.netrc` credential leak via malicious URLs |
+| `setuptools` | 78.1.0 | ≥78.1.1 (one patch) | MAJOR | **new** — path traversal → arbitrary file write (CVSS 8.9) |
+| `django-filer` | 3.1.1 | ≥3.3.0 | MAJOR | unrestricted dangerous-type file upload |
+| `urllib3` | 1.26.20 | blocked — see boto3 triangle above | CRITICAL | 10 open advisories |
+| `pip`, `idna`, `sqlparse` | — | 25.3+/3.15/0.5.4 | MINOR | transitive/build-time only |
+
+Full report in session transcript 2026-07-08; socket.dev confirmed **no malware/typosquat/
+install-script alerts** across all 41 Python + 2 JS packages — behavioral scan clean.
 
 ## Explicitly deferred (separate track)
 

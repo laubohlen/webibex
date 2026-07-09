@@ -1,4 +1,4 @@
-django-filer==3.1.1 # installs django
+django-filer==3.3.0 # installs django
 django-filer[heif] # support .heic images
 django-allauth
 django-environ
