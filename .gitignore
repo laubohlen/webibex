@@ -1,7 +1,7 @@
-# fly.io deploy 
+# fly.io deploy
 .github/
 .dockerignore
-Dockerfile
+/Dockerfile
 fly.toml
 debug.ipynb
 pg-data.json

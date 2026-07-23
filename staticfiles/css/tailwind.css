@@ -66,6 +66,8 @@
 .imageToLandmark {
     /* margin-top: 4; */
     cursor: default;
+    width: 100%;
+    height: auto;
 }
 .rightChip {
     /* margin-top: 4; */

@@ -95,21 +95,22 @@ existing threshold), not new architecture.
 | Task | Estimate | Notes |
 |---|---|---|
 | dcg profile fix | done | already merged to main |
-| Routine CVE bumps (Django, pillow, django-allauth, django-filer, requests, lxml, setuptools) | ~2.75d | standard version bumps + regression check — see expanded CVE list below (2026-07-08 audit) |
-| boto3/botocore/urllib3 triangle | ~1.5-2.5d | **blocked on B2 test bucket** — verify `x-amz-checksum-algorithm` compatibility before bump |
+| Routine CVE bumps (Django, pillow, django-allauth, django-filer, requests, lxml, setuptools) | **done (2026-07-09)** | commit `480607b` — final versions in the table below |
+| boto3/botocore/urllib3 triangle | ~1.5-2.5d | **blocked on B2 test bucket** — root cause + fix path documented in `tmp/memo-questions-for-lauren.md` item #5, not yet applied |
 | TensorFlow removal | ~0.5d | **deferred to 2026-07-17** — user talking to original developer (Lauren) first; see below |
-| JS build-tooling cleanup | ~0.25d | `npm audit fix` scope, build-time only; also fix `node/package.json` caret ranges (`^3.4.6`, `^5.6.3`) → exact pins |
-| Minimal CI scaffold | ~1-1.5d | repo currently has zero CI |
+| JS build-tooling cleanup | **done (2026-07-09)** | exact pins applied, commit `480607b`; `npm audit fix` scope was a no-op (already clean) |
+| Minimal CI scaffold | ~1-1.5d | **deferred to 2026-07-17**, same conversation — repo currently has zero CI |
 
-**Status**: plan approved by user 2026-07-07; execution batch starting 2026-07-08.
-TensorFlow removal excluded from this batch (see below). **CI scaffold also excluded from
-this batch as of 2026-07-08** — user wants to ask Lauren about deploy-workflow history
-first (Fly.io→Railway switch caveats) and whether a GitHub→GitLab repo move is actually
-planned before building GitHub Actions CI that might need redoing. Current batch is now:
+**Status**: plan approved by user 2026-07-07. Batch narrowed twice on 2026-07-08 (CI
+scaffold deferred pending a Lauren conversation; TensorFlow removal already deferred) to:
 Python CVE bumps (Task 2) + JS pin cleanup (Task 3) + `init_prod_requirements.txt` sync
-(Task 4), verified **locally** (pip-audit/OSV clean + manual `manage.py check`/`migrate`/
-`test` + manual smoke-test checklist) instead of via a CI gate. User plans to update
-dependencies locally now and push to a repo (GitHub or a GitLab clone, TBD) later.
+(Task 4). **Executed and committed 2026-07-09** (`480607b`), verified **locally**
+(OSV-clean for all 7 bumped packages, re-confirmed via socket.dev against the final
+committed versions; `manage.py check`/`migrate`/`test` pass; staged Django 5.1→5.2
+deprecation check completed with zero new deprecations; allauth and filer-upload flows
+exercised end-to-end via Django's test client) instead of via a CI gate. See
+`docs/session-notes-2026-07-09-webibex-security-remediation.md` for the full execution
+trace. CI scaffold and TensorFlow removal remain deferred to 2026-07-17.
 
 **Open blocker**: B2 test-bucket provisioning — needed before the boto3/botocore/urllib3
 triangle task can start.
@@ -122,22 +123,30 @@ RunPod-access request (needed for the TF2 embedding-model swap, see session note
 ### Expanded CVE findings (2026-07-08 `/supply-chain` audit, OSV + socket.dev)
 
 Cross-checked with real OSV batch API + socket.dev behavioral scan data (not simulated).
-Found more than the 2026-07-07 snapshot — newly disclosed in the intervening day:
+Found more than the 2026-07-07 snapshot — newly disclosed in the intervening day. **Final
+column added 2026-07-09** — the actual version committed in `480607b`, live-verified
+against PyPI at execution time (higher than some floors below, where the floor version
+still left a CVE open):
 
-| Package | Pinned | Fix target | Severity | Notes |
-|---|---|---|---|---|
-| `Django` | 5.0.14 | 5.2 LTS (5.0.x has **no** fixed version — not EOL-backported) | **CRITICAL** (socket.dev reclass; OSV CVSS 7.5) | SQL injection via `_connector` kwarg (GHSA-frmv-pr5f-9mcr) + 3 more |
-| `pillow` | 11.2.1 | likely 12.x, not same-major patch — confirm before bump | MAJOR | most of 9 advisories fixed only in 12.1.1/12.2.0 |
-| `django-allauth` | 65.7.0 | ≥65.14.1 | MAJOR | 6 advisories, 2 open-redirect + 3 IdP identity issues |
-| `lxml` | 5.3.2 | ≥6.1.0 | MAJOR | **new** — XXE via default `iterparse()` config (CVSS 7.5) |
-| `requests` | 2.32.3 | ≥2.32.4 (one patch) | MAJOR | **new** — `.netrc` credential leak via malicious URLs |
-| `setuptools` | 78.1.0 | ≥78.1.1 (one patch) | MAJOR | **new** — path traversal → arbitrary file write (CVSS 8.9) |
-| `django-filer` | 3.1.1 | ≥3.3.0 | MAJOR | unrestricted dangerous-type file upload |
-| `urllib3` | 1.26.20 | blocked — see boto3 triangle above | CRITICAL | 10 open advisories |
-| `pip`, `idna`, `sqlparse` | — | 25.3+/3.15/0.5.4 | MINOR | transitive/build-time only |
+| Package | Pinned | Fix target (2026-07-08 estimate) | Final (committed) | Severity | Notes |
+|---|---|---|---|---|---|
+| `Django` | 5.0.14 | 5.2 LTS (5.0.x has **no** fixed version) | **5.2.15** | **CRITICAL** (socket.dev reclass; OSV CVSS 7.5) | SQL injection via `_connector` kwarg (GHSA-frmv-pr5f-9mcr) + 3 more; 5.2.8 still had 39 open advisories, needed 5.2.15 |
+| `pillow` | 11.2.1 | likely 12.x, confirm before bump | **12.2.0** | MAJOR | confirmed — 11.3.0 still had 7 open CVEs, 12.2.0 needed |
+| `django-allauth` | 65.7.0 | ≥65.14.1 | **65.14.1** | MAJOR | 6 advisories, 2 open-redirect + 3 IdP identity issues |
+| `lxml` | 5.3.2 | ≥6.1.0 | **6.1.0** | MAJOR | XXE via default `iterparse()` config (CVSS 7.5) |
+| `requests` | 2.32.3 | ≥2.32.4 (one patch) | **2.33.0** | MAJOR | 2.32.4 still left CVE-2026-25645 (temp-file reuse) open, needed 2.33.0 |
+| `setuptools` | 78.1.0 | ≥78.1.1 (one patch) | **78.1.1** | MAJOR | path traversal → arbitrary file write (CVSS 8.9) |
+| `django-filer` | 3.1.1 | ≥3.3.0 | **3.3.0** | MAJOR | unrestricted dangerous-type file upload |
+| `urllib3` | 1.26.20 | blocked — see boto3 triangle above | *(unchanged, out of scope)* | CRITICAL | 10 open advisories; fix path documented in `tmp/memo-questions-for-lauren.md` item #5 |
+| `pip`, `idna`, `sqlparse` | — | 25.3+/3.15/0.5.4 | *(unchanged, transitive, out of scope)* | MINOR | build-time only |
+
+`django-polymorphic==3.1.0` (not in the original table) was confirmed compatible with
+Django 5.2 via a real `pip install` — no bump needed.
 
 Full report in session transcript 2026-07-08; socket.dev confirmed **no malware/typosquat/
-install-script alerts** across all 41 Python + 2 JS packages — behavioral scan clean.
+install-script alerts** across all 41 Python + 2 JS packages at both the pre-bump scan
+(2026-07-08) and re-verified against the final committed versions (2026-07-09) —
+behavioral scan clean throughout.
 
 ## Explicitly deferred (separate track)
 
@@ -148,3 +157,42 @@ supply-chain webibex update"). See `agents_writer` project memory
 (`docs/session-notes-2026-07-07-webibex-ibex-security-plan.md` in `agents_writer`) for
 the full research trail (MegaDescriptor/wildlife-tools backbone comparison, horn-tip wear
 literature, muzzle-recognition precedent, near-duplicate augmentation risk).
+
+## TODO — Railway deployment hardening (not started, 2026-07-23)
+
+Railway currently builds this app via its own auto-detected Nixpacks builder — no
+`Dockerfile`/`railway.json`/`nixpacks.toml` in this repo (confirmed
+`docs/session-notes-2026-07-08-webibex-security-remediation.md:61-71`). That means there
+is currently no way to apply the same hardened-base-image treatment already done for
+`samgis-be` (pinned DHI/hardened base, VEX-exception trust matrix, Scout/Trivy-verified).
+
+- Check Railway's docs for whether a custom-`Dockerfile` build path is supported
+  (would be the prerequisite for adopting a hardened base image here, same pattern as
+  the `dhi.io/tensorflow-serving:2` candidate already scoped for the RunPod serving side
+  in `docs/tf1-to-tf2-migration-plan.md:133-168`).
+- At minimum, bump the Python pin: `runtime.txt` is currently `python-3.12.5` — check
+  current supported versions on both Railway and RunPod (the three
+  `tmp/inference/*/builder/requirements.txt` trees are Python-pinned independently, see
+  `docs/session-notes-2026-07-21-svglib-reportlab-dependency-separation.md:41-45`) and
+  bring them in line.
+- Trigger: next security-remediation batch, or whenever the `samgis-be` hardening
+  pattern is revisited for this project.
+
+## TODO — stale `staticfiles/` vs. current Django version (found 2026-07-23)
+
+Re-running `manage.py collectstatic` locally (during the landmark-CSS-fix CR,
+`docs/changes/2026-07-23-fix-landmark-image-scale-mismatch.md`) showed real content
+drift in `staticfiles/admin/*` and `staticfiles/filer/*` — Django 5.2.15's own admin
+CSS/JS (the currently-pinned version, per `480607b`) differs from whatever version
+last generated the committed `staticfiles/` tree. That commit bumped `requirements.txt`
+but apparently never re-ran `collectstatic`, so the tracked, served copy of Django's
+own admin assets is stale relative to the app's actual dependency versions.
+
+- Run a full `manage.py collectstatic` and review the diff (expect `staticfiles/admin/*`,
+  `staticfiles/filer/*`, possibly others) as its own dedicated commit — do not bundle
+  with an unrelated CR (already deliberately kept out of the 2026-07-23 CSS fix).
+- Confirm no visual/functional regressions in `/webibex/` (Django admin) and
+  `/filer/` before committing — Django 5.2's admin CSS has real UI changes vs. earlier
+  versions (dark-mode variables, etc., seen in the diff).
+- Trigger: next dependency bump that touches Django, `django-filer`, or
+  `django-allauth`; or the next full security-remediation batch.

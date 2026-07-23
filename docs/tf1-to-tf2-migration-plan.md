@@ -216,29 +216,196 @@ here because the staging copies these notes originally lived in,
   were dropped from the consolidated branch — unused by the production chip
   path.
 
-**Step 5 (consolidate) — still open**: `triplet-reid-clean/` (clean clone of
-`VisualComputingInstitute/triplet-reid @ a538696`, now on a checked-out
-branch `tf2-export-pipeline` with the Step 2/3 port staged) still needs a
-commit + tag. Its only remote is the upstream clone origin,
-`https://github.com/VisualComputingInstitute/triplet-reid.git` — read-only
-(no push access, and not an intended destination for this work); the
-`tf2-export-pipeline` branch has no remote/tracking of its own, so right now
-this consolidated code exists only locally, inside webibex's gitignored
-`tmp/` tree. No durable remote home has been decided yet (fork upstream?
-fold into webibex proper?) — worth resolving before this is considered truly
-"consolidated." The five-directory sprawl (`wibex_model_v01/v02`, `model/`,
-`new_model2/`, `saved_model/`) is pending removal from `tmp/inference/`;
-`wibex_model_v03/` must be kept regardless (numeric baseline).
+**Step 5 (consolidate) — DONE (2026-07-20)**: the port is committed to
+webibex's own git history at `training/triplet-reid/` (not the nested
+`triplet-reid-clean/` clone under gitignored `tmp/` — that had no durable
+remote and is now superseded scratch). Independently reviewed (Fable 5,
+prompt drafted by Opus) before commit — no HIGH findings; a handful of
+MEDIUM staleness issues (stale `conftest.py` path, missing `skipif` guards
+on tests depending on gitignored fixture data, stale "STAGING" headers,
+stale CR-doc paths) were fixed in the same commit. One real regression was
+also caught and fixed pre-commit: `tests/test_export_pipeline.py`'s path
+constants were wrong for the final location (computed one directory too
+shallow — a symptom of the code moving between staging/nested-clone/final
+locations three times over the course of this work).
+
+**Real host validation, post-consolidation (2026-07-20)**: re-ran
+`host_runbook/phase4_verification_gate.sh` (updated to point at
+`training/triplet-reid/` instead of the old `triplet-reid-clean/`) in a
+real `tensorflow/tensorflow:2.18.0` Docker container. All three parts
+passed again against the actual committed code: checkpoint variable-name
+diff 272/272 match; numeric equivalence `max abs diff: 3.099e-06` at
+`atol=1e-4` (identical to the original host run — confirms determinism);
+`serving_default` signature matches production exactly. Confirms the
+three-location move didn't break anything. `host_runbook/phase0_*` was
+NOT re-run for this — it deliberately tests raw, unpatched `tf_slim`
+directly (not through `nets/`'s monkeypatch) and is expected to fail with
+the same `tf_keras.legacy_tf_layers` error the ADR already root-caused;
+it's stale as a gate now that the fix is committed, superseded by Phase
+2/4 which exercise the real, patched code path.
+
+The five-directory sprawl (`wibex_model_v01/v02`, `model/`, `new_model2/`,
+`saved_model/`) is still pending removal from `tmp/inference/`;
+`wibex_model_v03/` must be kept regardless (numeric baseline). No durable
+remote has been set up for `training/triplet-reid/` beyond webibex's own
+repo — it's not a separate fork/clone, it's now just part of webibex.
+
+## TF 2.18.0 → 2.18.1 patch bump (2026-07-20)
+
+Applied as a low-risk supply-chain fix, independent of (and before) the
+larger planned 2.18→2.21.0 migration. TF 2.18.1's release notes: security
+fix bundling curl 8.11.0 (patches `CVE-2024-2004`, `-2379`, `-2398`,
+`-2466`, `-6197`, `-7264`, `-8096`, `-9681`), plus a loosened `ml_dtypes`
+upper bound (`<1.0.0`). Breaking changes are `tf.lite.Interpreter`
+deprecation and TPU-only — neither touches this pipeline (no TFLite, no
+TPU, CPU/serving only). Risk assessed as low: the vendored curl's typical
+attack surface (TF fetching from attacker-controlled URLs) doesn't apply
+to the RunPod serving path, but the patch is free and reduces attack
+surface regardless.
+
+Bumped `tensorflow==2.18.0` → `2.18.1` in:
+- `tmp/inference/runpod_ibex_embedding_endpoint/builder/requirements.txt`
+  (the real production pin — base image is plain `python:3.12`, pip
+  resolves the wheel directly, no Docker tag dependency).
+- `tmp/inference/host_runbook/Dockerfile.pipdeps` — **no
+  `tensorflow/tensorflow:2.18.1` Docker Hub image tag exists** (confirmed:
+  `docker manifest inspect tensorflow/tensorflow:2.18.1` 404s; only
+  `2.18.0` was ever published as an image for this patch version). Kept
+  `FROM tensorflow/tensorflow:2.18.0` and added a separate
+  `pip install tensorflow==2.18.1` step to upgrade on top of the base
+  image instead.
+
+**`tf-keras` stays pinned at `2.18.0`** — confirmed via PyPI that
+`tf-keras` never published a `2.18.1` (only one 2.18.x release exists);
+it tracks TF's *minor* version, not patch, matching the same pattern
+already found for the 2.21 line (latest `tf-keras` is `2.21.0`, no
+`2.21.1`). `ml_dtypes` isn't pinned anywhere in this project — pip
+resolves TF 2.18.1's own loosened constraint automatically.
+`tensorboard==2.18.0` also stays unchanged — confirmed unused at serving
+time (no import in `handler.py`/`test_model.py`) and follows the same
+non-patch-release pattern.
+
+**Verification — PASSED (2026-07-20)**: re-ran
+`host_runbook/phase4_verification_gate.sh` after this bump (Docker layer
+cache auto-invalidated from the changed `Dockerfile.pipdeps` line, no
+manual `docker rmi` needed). All three parts passed with the exact same
+numeric result as TF 2.18.0: checkpoint variable-name diff 272/272 match;
+numeric equivalence `max abs diff: 3.099e-06` at `atol=1e-4` (byte-for-byte
+identical value — confirms zero behavioral change for this pipeline);
+`serving_default` signature matches production exactly. The pip install
+log also confirmed none of the already-installed transitive deps
+(`grpcio 1.67.0`, `tensorboard 2.18.0`, `keras 3.6.0`, `numpy 2.0.2`,
+`h5py 3.12.1`, `ml-dtypes 0.4.1`) needed to change — exactly as predicted
+above. **TF 2.18.1 is now the verified baseline** for this pipeline.
+
+## TF 2.21.0 migration: dedicated per-version Dockerfiles (2026-07-20)
+
+Superseded the originally-planned single ARG-parametrized `Dockerfile.pipdeps`
+approach (a code-planner/code-analyst pass had already produced a plan and
+25-scenario test spec for that design). Switched to **dedicated,
+tracked-in-git Dockerfiles per TF version** instead:
+
+- `training/triplet-reid/dockerfiles/{tf2180,tf2181,tf2210}/Dockerfile` —
+  plain `Dockerfile` filename per version-specific subdirectory, not
+  `Dockerfile.<suffix>` — the dot-suffix naming convention breaks the
+  project's Sonar scan.
+- `training/triplet-reid/dockerfiles/verify_gate.sh <version-dir>` — builds
+  the given version's image and runs the same 3-part gate (checkpoint
+  var-name diff, numeric equivalence, signature parity) against it, reusing
+  the existing Phase 4a/4b/4c probe scripts from
+  `tmp/inference/host_runbook/` (pure Python, not Dockerfiles — not subject
+  to the naming constraint). `docker build` has network access (pulling the
+  base image, installing pip packages); every `docker run` step that
+  executes the pipeline code itself runs with `--network=none`.
+- Incremental version path: 2.18.0 → 2.18.1 → 2.21.0, verified one hop at a
+  time rather than jumping straight to 2.21.0. Fall back to 2.19/2.20 as
+  intermediate stepping stones only if 2.21.0 breaks something — the
+  batch-norm monkeypatch fix already sidesteps the specific historical
+  `tf_keras.legacy_tf_layers` break by not depending on that shim at all, so
+  a direct jump was judged worth trying first.
+- **Security check before starting this migration**: full offline scan of
+  OSV.dev's complete PyPI advisory database (1,707 tensorflow-related
+  records) found zero advisories affecting either 2.18.1 or 2.21.0 — this
+  migration has no security driver, it's maintenance currency only.
+
+**All three versions verified — PASSED (2026-07-20)**, each via its own
+dedicated image in `training/triplet-reid/dockerfiles/`:
+
+| Image | TF | Checkpoint var-name diff | Numeric (`atol=1e-4`) | Signature |
+|---|---|---|---|---|
+| `tf2180` | 2.18.0 (pure, no patch) | 272/272 match | `max abs diff: 3.099e-06` | matches |
+| `tf2181` | 2.18.1 | 272/272 match | `max abs diff: 3.099e-06` | matches |
+| `tf2210` | 2.21.0 | 272/272 match | `max abs diff: 3.099e-06` | matches |
+
+Identical numeric result across all three — confirms the export is
+deterministic and behaviorally unchanged regardless of TF version. **No
+code changes were needed for TF 2.21.0**: the `_batch_norm_compat`
+monkeypatch and eager-restore mechanism both hold up as-is. The planned
+fallback (hopping through 2.19/2.20 as intermediate stepping stones) was
+not needed — the direct jump from 2.18.1 to 2.21.0 worked on the first
+try. TF 2.21.0 is now a fully verified alternate to the 2.18.1 baseline.
+
+Not yet decided: whether/when to commit `training/triplet-reid/dockerfiles/`
+(currently untracked working-tree files) and adopt one of the three as the
+new default for future runbook use — separate decision from verification.
+
+## Default version decision + full e2e verification (2026-07-23)
+
+**Decision: TF 2.21.0 (`tf2210`) becomes the default** for future runbook
+use, committed this session. Rationale: production currently runs TF1, so
+the gap between 2.18.1 and 2.21.0 is immaterial to production risk either
+way — better to start on the version with the most maintenance headroom.
+`training/triplet-reid/dockerfiles/` committed with this default.
+
+Beyond the Phase 4a/4b/4c gate (already passing per the table above), a
+full manual e2e test ran this session, end to end through the real
+application code paths:
+
+- Exported a fresh SavedModel with the `tf2210` image, persisted (not the
+  `mktemp` dir `verify_gate.sh` normally cleans up).
+- Ran it through `tmp/inference/runpod_ibex_embedding_endpoint/handler.py`
+  (the actual RunPod serverless entry point) in RunPod's local-server test
+  mode (`--rp_serve_api`), joined to the devcontainer's own network
+  namespace (`--network container:<id>`) since the devcontainer's outbound
+  network is sandboxed (`host.docker.internal` unreachable from inside it).
+- Pointed the real webibex Django app's `core/utils.py:endpoint_inference()`
+  at that local server (temporarily — reverted after) and drove the actual
+  upload → landmark → crop → embed flow through the browser, repeatedly,
+  across multiple real images. Multiple `Embedding` rows were created with
+  correct 128-dim vectors end-to-end through the real HTTP request path,
+  not just the handler in isolation.
+- Caught and fixed one unrelated pre-existing bug in the process:
+  `.imageToLandmark` (`static/css/tailwind.css`) had no width rule, so any
+  uploaded image narrower than `settings.LANDMARK_IMAGE_WIDTH` (1600px)
+  rendered at its own natural size in the browser, while the backend's
+  `scale_coordinate()` still assumed a 1600px-wide render — silently
+  shrinking landmark clicks toward the top-left corner for any image
+  <1600px wide. Fixed by adding `width: 100%; height: auto;` to that class
+  (own CR). Confirmed via before/after annotated screenshots. Unrelated to
+  TF version — pure Django/frontend bug, would have reproduced identically
+  against the pre-existing `laubohlen/ibex_embedding_cpu:v0.01` image too.
+
+This is stronger verification than `core/test_model.py` (the local-dev TF
+script already flagged for removal in `docs/security-remediation-plan.md`)
+could ever provide — that script isn't a real test and hardcodes a path to
+the original developer's machine.
 
 ## Unresolved questions
 
-- Does `tf_slim` (unmaintained since ~2021) actually import cleanly under TF 2.18/2.21?
-  Untested — first thing to verify in Step 2.
+- ~~Does `tf_slim` (unmaintained since ~2021) actually import cleanly under TF 2.18/2.21?~~
+  **Resolved (2026-07-20)**: yes, on both — via the `_batch_norm_compat` monkeypatch
+  (bare `tf_slim` alone still breaks on TF 2.16+/Keras 3, see the batch-norm decision
+  above), verified for real in Docker on 2.18.0, 2.18.1, and 2.21.0.
 - Is retraining ever actually in scope, or is this permanently "same weights, new
-  export wrapper" (per the `v02` detour being abandoned)? Worth confirming with
-  Laurens directly rather than assuming.
-- Should this migration target TF 2.18 (matches current production) or something
-  newer? No strong reason found to move past what's already deployed and verified.
+  export wrapper" (per the `v02` detour being abandoned)? Still open — worth confirming
+  with Laurens directly rather than assuming.
+- ~~Should this migration target TF 2.18 (matches current production) or something
+  newer?~~ **Resolved (2026-07-20)**: moved to and verified TF 2.21.0 as an alternate
+  (professor/project wanted to move past 2.18).
+- ~~Whether/when to commit `training/triplet-reid/dockerfiles/` and which TF version
+  becomes the runbook default?~~ **Resolved (2026-07-23)**: committed, TF 2.21.0
+  (`tf2210`) is the default — see "Default version decision + full e2e verification"
+  above.
 
 Related: `~/workspace/webibex/docs/security-remediation-plan.md` (separate, already
 executed remediation track — TF was recommended for removal there in webibex's own

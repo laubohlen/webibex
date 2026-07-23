@@ -1,34 +1,102 @@
-# Session notes — 2026-07-20 — TF1→TF2 export pipeline: host verification through to full pass
+# Session notes — 2026-07-20 — TF migration wrap-up + e2e test attempt
 
-Continuation of `docs/tf1-to-tf2-migration-plan.md` (2026-07-17 forensic investigation) and the earlier code-planner/code-analyst/code-executioner pipeline (same date range, prior session, produced the initial `nets_tf2/`, `heads_tf2/`, `export_saved_model.py` staging files and the `host_runbook/` scaffolding). This session ran the host-side verification gate to completion.
+Continuation of the TF1→TF2 `triplet-reid` export pipeline work. The durable
+record for everything through the 3-version verification is
+`docs/tf1-to-tf2-migration-plan.md` — this file covers only what happened
+*after* that (the e2e test attempt) and hasn't been folded in yet.
 
-## Outcome
+## State at start of this segment
 
-**Phase 4 (R5 mandatory verification gate) passed in full** as of this session:
-- Phase 4a: checkpoint variable-name diff — 272/272 exact match, 0 missing.
-- Phase 4b: export succeeded; numeric equivalence `max abs diff: 3.099e-06` at `atol=1e-4` against `test_embedding_old.h5`.
-- Phase 4c: `serving_default` signature matches `wibex_model_v03`'s captured baseline exactly (input `bytes_inputs`, output `output_tensor`, method `tensorflow/serving/predict`).
+- `training/triplet-reid/` committed (`cd7b5b0`), TF 2.18.1 verified baseline.
+- `training/triplet-reid/dockerfiles/{tf2180,tf2181,tf2210}/Dockerfile` +
+  `dockerfiles/verify_gate.sh` — all three TF versions (2.18.0, 2.18.1, 2.21.0)
+  gate-passed with identical numeric result (`max abs diff: 3.099e-06`).
+  **`dockerfiles/` is untracked/uncommitted** as of this session's end.
+- OSV.dev full-database scan (1,707 tensorflow advisories): zero affecting
+  2.18.1 or 2.21.0.
 
-Verified export copied to `webibex/tmp/inference/wibex_export_verified/`. Nothing has been committed to webibex's git history yet — all work lives under `tmp/inference/`.
+## e2e test attempt: Django frontend + locally-loaded model
 
-## Checkpoint provenance (background — resolved earlier in this investigation, documented in ADR-export-pipeline.md)
+Goal: exercise the real upload → chip → embed → retrieval flow against a
+freshly-verified export, not just the isolated numeric gate.
 
-Confirmed via 3-file SHA256 exact match (`.data`, `.index`, `.meta`) that the checkpoint producing `wibex_model_v03` is `models_run1/results_hornmodel_1662468625/checkpoint-4000` from the original 2022 training runs — a **hornmodel** (horn-identification), not **ibexmodel** (animal-identification) checkpoint, despite the product being called "ibex identification." Confirmed correct, not a mismatch: production's chip input is a single horn-side crop. Cross-confirmed against the Master's thesis (`Masterthesis_Laurens_Bohlen.pdf` / `tex_Masterthesis/chapters/methods.tex:193`, "All models were scheduled to train for 4000 iterations") and the deployed Docker image's build history (`docker history laubohlen/ibex_embedding_cpu:v0.01` — confirmed no other provenance trail exists in the image itself).
+**Architecture found** in `core/utils.py::embed_new_chip()`: four branches
+keyed on `settings.ENDPOINT_LOCALLY` / `settings.POSTGRES_LOCALLY`. The
+"local model" branch (`model_is_local`) loads `core/embedding_model/`
+directly inside the Django process via `get_tf()` (lazy `import tensorflow`)
+— no container involved. `endpoint_inference()` (the RunPod path) hardcodes
+`https://api.runpod.ai/v2/{endpoint_id}/runsync`, no override mechanism.
 
-## Real bugs found and fixed this session
+**Real blocker found, not yet fixed**: `webibex/settings.py:141` sets
+`ENDPOINT_LOCALLY = True` unconditionally (not `env()`-backed, no default
+fallback) — combined with `model_is_local = not (ENVIRONMENT == "production"
+or ENDPOINT_LOCALLY == True)`, this makes the "local model" branch
+**unreachable by default**, even outside production. Nobody running this
+app locally today would hit the local-model path without manually editing
+this line.
 
-1. **`INFERENCE_DIR` path resolution bug** in `host_runbook/lib/common.sh` — only went up one directory level (`lib/ -> host_runbook/`) instead of two (`lib/ -> host_runbook/ -> tmp/inference/`). Fixed.
-2. **`tf_upgrade_v2` report-parsing bug** in `phase1_clean_clone.sh` — original grep pattern assumed `ERROR:` appears at line-start; the report's actual format is `Processing file 'X'` header blocks with bare `line:col: ERROR:` lines that don't repeat the path. Replaced with `phase1_parse_report.py`, a stateful parser. Verified against the real captured report: correctly extracts all 6 expected files.
-3. **`tf_slim.batch_norm` incompatible with TF 2.16+/Keras 3** — `ModuleNotFoundError: No module named 'tf_keras.legacy_tf_layers'`. Root cause: `tf_slim==1.1.0` predates both Keras 3 and the `tf-keras` companion package; its `batch_norm()` calls into a TF1-era compat shim (`tensorflow.python.layers.normalization`) whose `LazyLoader` targets a submodule `tf-keras==2.18.0` doesn't ship. Confirmed empirically (package contents inspected directly), not guessed. Fixed via `_batch_norm_compat` in `nets_tf2/__init__.py` — monkeypatches `slim.batch_norm` in place with a `tf.compat.v1.get_variable`-based reimplementation matching tf_slim's exact `BatchNorm` scope-naming convention (a first attempt using `tf.keras.layers.BatchNormalization` passed the forward-pass smoke test but produced wrong variable names — Keras's auto-incrementing `batch_normalization_N` instead of the checkpoint's actual `BatchNorm` — caught by the Phase 4a name-diff gate before it could cause a silent wrong restore).
-4. **Session-based checkpoint restore fundamentally incompatible with `tf.compat.v1.wrap_function`-traced variables.** Three architecturally different restore mechanisms failed identically (`Saver.restore()` implicit read, `Saver.restore()` + explicit `tf.convert_to_tensor`, `init_from_checkpoint()` + `global_variables_initializer()`), all hitting `capture_by_value -> _create_placeholder_helper` ("You must feed a value for placeholder tensor"). Root cause confirmed via a minimal isolated diagnostic (`host_runbook/phase4_debug_wrapfn_probe.py`): variables created inside a `wrap_function` trace are genuinely live eager `ResourceVariable` objects — confirmed across 4 distinct creation patterns (`get_variable`, `tf_slim`'s own conv2d weights, `tf.Variable`+tensor, `tf.Variable`+callable). `WrappedFunction.__call__` is the only thing that knows how to feed these captures; any raw `Session.run()` against `wrapped.graph` bypasses that. Fixed by restoring via eager `.assign()` per variable (`_restore_variables_eagerly` in `export_saved_model.py`) — no session, no graph execution at all. Full diagnostic trail in `ADR-export-pipeline.md`.
-5. **`export_saved_model.py` output key bug** — returned `{"embeddings": ...}`, but production's actual key (confirmed via Phase 3's `saved_model_cli` capture) is `output_tensor`. Fixed.
-6. **`phase4b_numeric_gate.py` bug** — blindly took `keys[0]` from `test_embedding_old.h5`, which happened to be `augmentation_types` (unrelated metadata), not `emb`. Fixed to look up `emb` explicitly.
-7. **Phase 4c over-strict signature comparison** — diffed the *entire* `saved_model_cli show --all` output, which includes the MetaGraph's internal op set (legitimately differs — TF1.15-frozen original uses `FusedBatchNormV3`, this TF2.18-traced export decomposes to `Rsqrt`/`Mul`) and concrete-function trace metadata (old baseline capture has none at all). Neither is part of R5(c)'s actual requirement. Fixed via `phase4c_extract_signature.py`, comparing only the `signature_def['serving_default']` block.
+**Proposed but NOT applied** (discussed, not written):
+1. `webibex/settings.py:141`: `ENDPOINT_LOCALLY = True` →
+   `ENDPOINT_LOCALLY = env.bool("ENDPOINT_LOCALLY", default=True)` —
+   preserves current default everywhere, only changes behavior if the env
+   var is explicitly set.
+2. `core/utils.py:320,338`: hardcoded `"core/embedding_model/"` → a
+   settings-configurable `EMBEDDING_MODEL_PATH`, default unchanged — lets a
+   test point at a separate export dir without touching the committed
+   `core/embedding_model/`.
 
-Also fixed: `host_runbook/phase2_smoke_test.sh` and `phase4_verification_gate.sh` originally installed `tf_slim`/`tf-keras`/`h5py` via `pip install --target=/pkgs` + `PYTHONPATH` (network isolation via a throwaway Docker volume) — this installed correctly but broke `tf-keras`'s internal dynamic-import machinery in a *different* way than the Keras-3 issue above. Replaced with a proper local Docker image (`Dockerfile.pipdeps`, `pip install` in a normal `RUN` step), built once and cached, with every actual execution step run `--network=none` against it.
+**Sandbox constraints hit while setting up a test venv**:
+- `pypi.org`/`files.pythonhosted.org` egress blocked (403) intermittently —
+  root cause confirmed by the user: the session's temp-egress window had
+  expired, not a proxy-side cache issue (that was a wrong hypothesis pursued
+  for ~10 min before the user clarified).
+- `pip install` blocked by a `pip-guard`/`uv-guard` post-install audit
+  reporting a malformed CRITICAL finding (`package: null`) for ordinary
+  packages (`requests`) — confirmed the install actually succeeds and isn't
+  rolled back; this is a bug in the guard's vulnerability-scan response
+  parsing, not a real finding. Override: `DEPENDENCY_SCAN=warn`.
+- `uv pip install` (default cache mode) hit `Invalid cross-device link` on
+  `~/.cache/uv/archive-v0/` (overlayfs quirk) — worked around with
+  `--no-cache` or a relocated `UV_CACHE_DIR`.
+- `uv venv --python 3.12` failed (`runtime.txt` pins Python 3.12.5) — no
+  write access to `~/.local/share/uv/python` to download a managed
+  toolchain. User confirmed Python 3.13 (already on `PATH`) is fine for this
+  devcontainer test — not investigating the 3.12 mismatch further.
 
-## Still open
+**Real, unresolved dependency conflict** in `requirements.txt` as currently
+pinned: `svglib==1.5.1` (exact pin) has no wheel on PyPI at all, only an
+sdist. The only `svglib` versions with wheels (`1.6.0`, `2.0.2+`) require
+`reportlab>=4.4.3`, but `requirements.txt` pins `reportlab==4.3.1` (also
+exact). `svglib` is not skippable — `django-filer==3.3.0` (pinned) has its
+own dependency on `easy-thumbnails[svg]`, which requires `svglib`
+regardless of whether app code imports it (it doesn't — confirmed via
+repo-wide grep, but that's irrelevant to the resolver). Under a wheels-only
+("no arbitrary code execution at install time") install policy, these pins
+are simply unsatisfiable as-is — this is not specific to the test venv or
+anything done this session.
 
-- **Phase 5 (R6)**: consolidate `triplet-reid-clean/` into one committed git branch, replacing the `wibex_model_v01/v02/v03`/`model/`/`new_model2`/`saved_model` five-directory sprawl. `wibex_model_v03/` must be retained as the numeric baseline (R7) — not deleted. Not started.
-- `host_runbook/`'s staging-only notes (`nets_tf2/README.md`, `heads_tf2/README.md`) should be folded into the eventual commit message or a `CHANGELOG.md`, then removed, per the plan.
-- Future, deliberately out of scope for this CR: TF 2.21.0 revalidation (Phases 0/2/4 re-run under a newer TF — `docs/tf1-to-tf2-migration-plan.md` references `tensorflow/tensorflow:2.21.0`; the original ask mentioned 2.21.1, worth confirming the exact target before that follow-up starts), and the `dhi.io/tensorflow-serving` hardened base image swap for the actual production serving container — both explicitly deferred, see `docs/tf1-to-tf2-migration-plan.md`.
+User's suggested next steps (not yet investigated): check whether bumping
+`reportlab` is actually safe/needed, or whether `reportlab` is even still
+needed at all; if `svglib` genuinely needs to stay at an unwheeled version,
+consider cloning the `svglib` repo under `tmp/` and building a wheel
+locally, rather than seeking a `pip-guard`/`uv-guard` policy exception.
+
+**`.venv/` state at session end**: created (`.venv/bin/python` → system
+Python 3.13.5), most of `requirements.txt` installs cleanly, blocked on
+`svglib`/`reportlab`. Not usable for the e2e test yet.
+
+## Also still open (carried from `tf1-to-tf2-migration-plan.md`)
+
+- `verify_gate.sh` does not persist its export (unlike the original
+  `phase4_verification_gate.sh`, which copies to `wibex_export_verified/`)
+  — a fresh persisted export would be needed to actually swap into
+  `EMBEDDING_MODEL_PATH` for the e2e test once the venv is unblocked.
+- `training/triplet-reid/dockerfiles/` not yet committed to git.
+- No decision yet on which TF version (2.18.1 vs 2.21.0) becomes the
+  runbook default going forward.
+- `dhi.io/tensorflow-serving:2` (pinned to TF Serving 2.20.0) hardened-image
+  swap for the production RunPod serving container — separate, deferred
+  track, version mismatch vs. 2.21.0 already flagged in the migration doc's
+  Addendum section. User flagged this again as a "next todo" this session.
+- Five-directory sprawl (`wibex_model_v01/v02`, `model/`, `new_model2/`,
+  `saved_model/`) under `tmp/inference/` still pending removal.
