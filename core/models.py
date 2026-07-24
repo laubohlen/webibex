@@ -21,7 +21,7 @@ class Animal(models.Model):
     sex = models.CharField(max_length=1, null=True, blank=True)
 
     def __str__(self) -> str:
-        return self.id_code
+        return self.id_code if self.id_code is not None else "[No ID Code]"
 
 
 class Region(models.Model):
@@ -49,7 +49,7 @@ class Region(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.name
+        return self.name if self.name is not None else "[No Name]"
 
 
 class Location(models.Model):

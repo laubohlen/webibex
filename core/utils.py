@@ -193,22 +193,17 @@ def generate_animal_id_code(filename: str):
     prefix = filename.split("_")[0]
     # find all newly generated animal codes, earlier codes don't contain "_"
     new_animals = Animal.objects.filter(id_code__contains="_")
-    if new_animals:
-        # convert to list
-        previous_generated_codes = [i.id_code for i in new_animals]
-        # Regular expression pattern to find a three-digit number
-        pattern = r"\d{3}"
-        code_number_list = [
-            re.findall(pattern, i) for i in previous_generated_codes
-        ]  # returns list of list
-        # convert to actual numbers
-        code_number_list = [int(i[0]) for i in code_number_list]
-        largest_number = max(code_number_list)
-        new_code = f"{prefix}_{largest_number+1:03}"  # -> 'prefix_014'
-    # first new animal
-    else:
-        id_number = 1
-        new_code = f"{prefix}_{id_number:03}"  # -> 'prefix_001'
+    # convert to list
+    previous_generated_codes = [i.id_code for i in new_animals]
+    # Regular expression pattern to find a three-digit number
+    pattern = r"\d{3}"
+    code_number_list = [
+        re.findall(pattern, i) for i in previous_generated_codes
+    ]  # returns list of list
+    # filter out malformed codes with no 3-digit run before extracting the number
+    matched_numbers = [int(i[0]) for i in code_number_list if i]
+    id_number = max(matched_numbers) + 1 if matched_numbers else 1
+    new_code = f"{prefix}_{id_number:03}"  # -> 'prefix_001' / 'prefix_014'
 
     return new_code
 
@@ -540,6 +535,7 @@ def get_task_request_origin(request):
     different pages (unidentified-images, image-update) but they are handled
     by the same view function.
     """
+    task_request_url_name = None
     referer = request.META.get("HTTP_REFERER")
     if referer:
         parsed_url = urlparse(referer)

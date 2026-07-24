@@ -14,6 +14,15 @@ def test_region_str_returns_name(region_factory):
     assert str(region) == "Alps"
 
 
+# S5 (Region twin of B4) -----------------------------------------------------
+@pytest.mark.django_db
+def test_region_str_none_name_returns_fallback(region_factory):
+    """Region twin of Bug B4 (fixed): __str__ returns a bracket-sentinel
+    fallback instead of raising TypeError when name field is None."""
+    region = region_factory(name=None)
+    assert str(region) == "[No Name]"
+
+
 @pytest.mark.django_db
 def test_landmark_str_returns_label():
     landmark = Landmark.objects.create(label="horn_tip")
@@ -34,11 +43,11 @@ def test_animal_str_returns_id_code(animal_factory):
 
 
 @pytest.mark.django_db
-def test_animal_str_none_id_code_raises_type_error(animal_factory):
-    """Bug B4 (pinned, not fixed): TypeError when id_code field is None."""
+def test_animal_str_none_id_code_returns_fallback(animal_factory):
+    """Bug B4 (fixed): __str__ returns a bracket-sentinel fallback instead
+    of raising TypeError when id_code field is None."""
     animal = animal_factory(id_code=None)
-    with pytest.raises(TypeError):
-        str(animal)
+    assert str(animal) == "[No ID Code]"
 
 
 # T25 -----------------------------------------------------------------------

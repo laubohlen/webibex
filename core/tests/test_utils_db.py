@@ -27,13 +27,41 @@ def test_generate_animal_id_code_increments_from_max(animal_factory):
 
 # T28 --------------------------------------------------------------------
 @pytest.mark.django_db
-def test_generate_animal_id_code_malformed_existing_code_raises_index_error(animal_factory):
-    """Bug B3 (pinned, not fixed): IndexError when an existing id_code
-    contains "_" but has no 3-digit run for re.findall to match."""
-    animal_factory(id_code="PNGP24_ab")
+@pytest.mark.parametrize(
+    "malformed_id_code",
+    [
+        "PNGP24_ab",  # letters only, no digit run
+        "PNGP24_",  # nothing after underscore
+        "PNGP24_12",  # 2 digits, below the 3-digit pattern
+    ],
+)
+def test_generate_animal_id_code_malformed_existing_code_falls_back_to_001(
+    animal_factory, malformed_id_code
+):
+    """Bug B3 (fixed): a malformed existing id_code (contains "_" but no
+    3-digit run for re.findall to match) is filtered out instead of
+    crashing, and generation falls back to "{prefix}_001"."""
+    animal_factory(id_code=malformed_id_code)
 
-    with pytest.raises(IndexError):
-        generate_animal_id_code("PNGP24_---_24_06_15_174811.jpg")
+    result = generate_animal_id_code("PNGP24_---_24_06_15_174811.jpg")
+
+    assert result == "PNGP24_001"
+
+
+# S6 ------------------------------------------------------------------------
+@pytest.mark.django_db
+def test_generate_animal_id_code_mixed_valid_and_malformed_uses_max_of_valid(
+    animal_factory,
+):
+    """Bug B3 (fixed): when a malformed id_code coexists with a valid one,
+    the malformed entry is filtered out and the valid entry's number is
+    used as the max (not a short-circuit to the fallback)."""
+    animal_factory(id_code="PNGP24_ab")
+    animal_factory(id_code="PNGP24_007")
+
+    result = generate_animal_id_code("PNGP24_---_24_06_15_174811.jpg")
+
+    assert result == "PNGP24_008"
 
 
 # T29 -----------------------------------------------------------------------
@@ -47,13 +75,19 @@ def test_get_task_request_origin_valid_referer_returns_url_name():
 
 
 # T30 -----------------------------------------------------------------
-def test_get_task_request_origin_no_referer_raises_unbound_local_error():
-    """Bug B1 (pinned, not fixed): UnboundLocalError when request has no
-    HTTP_REFERER -- task_request_url_name is never assigned."""
-    request = RequestFactory().get("/")
+@pytest.mark.parametrize("http_referer", [None, ""])
+def test_get_task_request_origin_no_referer_returns_none(http_referer):
+    """Bug B1 (fixed): when request has no (or an empty/falsy) HTTP_REFERER,
+    task_request_url_name is initialised to None instead of being left
+    unassigned."""
+    if http_referer is None:
+        request = RequestFactory().get("/")
+    else:
+        request = RequestFactory().get("/", HTTP_REFERER=http_referer)
 
-    with pytest.raises(UnboundLocalError):
-        get_task_request_origin(request)
+    result = get_task_request_origin(request)
+
+    assert result is None
 
 
 # T31 -----------------------------------------------------------------

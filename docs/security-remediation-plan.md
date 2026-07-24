@@ -207,3 +207,65 @@ own admin assets is stale relative to the app's actual dependency versions.
   versions (dark-mode variables, etc., seen in the diff).
 - Trigger: next dependency bump that touches Django, `django-filer`, or
   `django-allauth`; or the next full security-remediation batch.
+
+## TODO — latent bugs found during the B1/B3/B4 bug-fix round review (found 2026-07-24)
+
+Surfaced by the Opus + Fable 5 independent reviews of `core/utils.py`/`core/models.py`/
+`core/middleware.py` while fixing B1/B3/B4/Region-twin/middleware bugs. All three are
+pre-existing, dormant with the app's current data shapes, unchanged by that fix — not
+regressions, not urgent, but worth tracking rather than losing.
+
+- **`get_task_request_origin` is dead code** (`core/utils.py:530`) — confirmed zero
+  production callers anywhere in the codebase (only referenced by its own unit tests).
+  Either wire it up to whatever redirect flow it was originally meant for, or remove it
+  (along with its 2 leftover `print()` calls and broad `except Exception`).
+- **Middleware still has one uncaught exception path**: `RedirectToUserFolderMiddleware`
+  now catches `Http404` (fixed this round), but `get_object_or_404` also re-raises
+  `Folder.MultipleObjectsReturned` as-is if two `&lt;user&gt;_files` folders exist for the
+  same user (e.g. under different parents, or duplicate NULL-parent rows on Postgres).
+  Was equally uncaught before this fix — not new, just never fully closed.
+- **`generate_animal_id_code` regex family of bugs** (`core/utils.py:200`, all
+  pre-existing, dormant with current `PNGP24`-style 2-digit prefixes):
+  - `re.findall(r"\d{3}", id_code)[0]` picks the *first* 3-digit run, not necessarily
+    the sequence number — an id_code like `PNGP2024_007` would incorrectly extract `202`
+    instead of `007` if a prefix ever grows to 3+ digits.
+  - No prefix scoping: the max is computed across ALL `id_code`s containing `"_"`,
+    regardless of prefix — an existing `ALPS23_099` would make the next `PNGP24` animal
+    `PNGP24_100` instead of `PNGP24_001`.
+  - `>999` rollover: `f"{1000:03}"` → `PNGP24_1000` (11 chars) exceeds the model's
+    `id_code` `max_length=10` — would fail to save on Postgres once any prefix crosses
+    999 generated animals.
+- Trigger: next full test-coverage-expansion pass on `core/utils.py` (already planned),
+  or if any of these actually reproduce in production data.
+
+## TODO — add debug/observability logging at high-risk boundaries (found 2026-07-24)
+
+`core/utils.py` uses `print()` pervasively (20+ call sites, including the 2 left
+untouched in `get_task_request_origin` during the B1 fix, deliberately not converted
+mid-bugfix since there's zero logging infrastructure anywhere in `core/` — see
+`docs/session-notes-*` for that scoping decision) instead of the `logging` module
+(`python.md` § Logging: avoid `print()` for diagnostics, use a logger). Before/alongside
+the next coverage-expansion pass, introduce real logging — prioritize:
+
+- **Local-dev-specific branches**: everywhere `ENVIRONMENT`/`DEBUG`/`POSTGRES_LOCALLY`/
+  `ENDPOINT_LOCALLY`/`MODEL_IS_LOCAL`-style settings gate different code paths
+  (`webibex/settings.py`, `core/utils.py`'s `embed_new_chip()` branch selection) — these
+  are exactly where dev-vs-prod behavior silently diverges and where a wrong branch is
+  hardest to notice without a log line stating which path was taken.
+- **I/O operations**: image load/decode (`load_image()`, the AVIF/None-decode gap — B5,
+  still deferred), file reads/writes (`process_horn_chip()`, chip file generation),
+  `manage.py collectstatic`-adjacent static-asset drift (see the staticfiles TODO above).
+- **User interactions**: image upload → landmark → crop → embed flow (the multi-step
+  pipeline through `core/signals.py`, `core/views.py`'s upload handlers) — currently the
+  highest-value untested/unlogged surface per the coverage survey (`core/views.py` at
+  18% coverage, `core/signals.py` at 44%).
+- **External API calls**: RunPod `endpoint_inference()` (already has some error handling
+  but no structured logging of request/response shape on failure), B2/boto3 calls in
+  `core/b2_utils.py` (currently only 36% covered, real S3 logic largely untested).
+- Set up a proper logger (`logging.getLogger(__name__)` per `python.md` — no `structlog`
+  dependency currently in this project, so stdlib `logging` is the right default per the
+  Code Choice Hierarchy) once, then migrate `print()` call sites incrementally as each
+  area gets touched — not a single big-bang rewrite of the whole file.
+- Trigger: next time any of these areas gets touched for a bug fix or coverage
+  expansion (natural opportunity to add logging alongside, rather than a standalone
+  logging-only PR).

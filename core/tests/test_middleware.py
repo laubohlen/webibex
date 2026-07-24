@@ -3,7 +3,6 @@
 from unittest import mock
 
 import pytest
-from django.http import Http404
 from django.test import RequestFactory
 from django.urls import reverse
 from filer.models import Folder
@@ -61,16 +60,19 @@ def test_middleware_passes_through_for_non_changelist_path(user_factory):
 
 # T35c ------------------------------------------------------------------
 @pytest.mark.django_db
-def test_middleware_missing_folder_raises_http404_uncaught(user_factory):
-    """Bonus bug (pinned, not fixed): `except Folder.DoesNotExist` does not
-    catch what get_object_or_404 actually raises (django.http.Http404) when
-    the user's main folder is missing."""
+def test_middleware_missing_folder_passes_through_gracefully(user_factory):
+    """Bonus bug (fixed): `except Http404` now catches what
+    get_object_or_404 actually raises (django.http.Http404, not
+    Folder.DoesNotExist) when the user's main folder is missing, and the
+    request passes through to get_response normally."""
     user = user_factory(username="carol")
     Folder.objects.filter(name="carol_files", owner=user).delete()
-    get_response = mock.Mock()
+    get_response = mock.Mock(return_value="sentinel-response")
     middleware = RedirectToUserFolderMiddleware(get_response=get_response)
     request = RequestFactory().get(reverse("admin:filer_folder_changelist"))
     request.user = user
 
-    with pytest.raises(Http404):
-        middleware(request)
+    response = middleware(request)
+
+    assert response == "sentinel-response"
+    get_response.assert_called_once_with(request)

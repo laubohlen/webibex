@@ -1,3 +1,4 @@
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from filer.models import Folder
@@ -24,7 +25,7 @@ class RedirectToUserFolderMiddleware:
                         kwargs={"folder_id": main_user_folder.id},
                     )
                     return redirect(url)
-                except Folder.DoesNotExist:
+                except Http404:
                     # If the folder doesn't exist, proceed normally or handle it as you wish
                     pass
 
