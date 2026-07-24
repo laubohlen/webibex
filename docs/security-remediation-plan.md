@@ -269,3 +269,70 @@ the next coverage-expansion pass, introduce real logging — prioritize:
 - Trigger: next time any of these areas gets touched for a bug fix or coverage
   expansion (natural opportunity to add logging alongside, rather than a standalone
   logging-only PR).
+
+## TODO — region dropdown empty for users who didn't create the region (found 2026-07-24, RESOLVED 2026-07-24)
+
+Found during a manual e2e walkthrough (staticfiles/admin+filer refresh CR verification,
+unrelated to that CR — reproduced identically before and after it). Confirmed app-wide,
+not page-specific: Dashboard > Identification > "location" column > "set", clicking an
+existing location's region link, AND the equivalent "location" column in the Animal
+Dashboard (`templates/core/animal_images.html:23`) all use the same
+`{% post_task_redirect 'locate-image' oid=i.id %}` link, routing to the single shared
+`create_loaction` view (`webibex/urls.py:70-73`, note the pre-existing typo in the view
+name), which builds the region dropdown from:
+
+```python
+region_qs = Region.objects.filter(owner=request.user)  # core/views.py:665
+```
+
+Confirmed via direct DB query: both existing `Region` rows (`smoketest-region`,
+`regione2`) have `owner_id=2` (`chiptestuser`). Logging in as a *different* user (e.g.
+a freshly created superuser) legitimately gets an empty queryset — not a rendering bug,
+not related to the staticfiles refresh, the filter is working exactly as written.
+
+**Confirmed NOT a regression** (git blame, checked 2026-07-24): both `owner=` filters
+(`core/views.py:665`, `core/utils.py:383`) date to `46a66a8f`/`a6724250`
+(2025-02-17/2025-02-27, original developer) — over a year old, predates every commit
+touched this session. The "it worked before" observation is explained by session
+context, not a code change: a prior manual test almost certainly used the actual
+region-owning account (`chiptestuser`), while this session's walkthrough used a
+freshly created `e2e_admin` superuser with zero owned regions — same long-standing
+filter, different logged-in user, different visible result.
+
+**Decided: shared-by-design.** Regions are shared/global, not private to whoever
+created them — this matches the two other read-path call sites already in the
+codebase (`region_overview` at `core/views.py:613`, `save_image_location`'s region
+lookup at `core/views.py:628`) which never scoped by `owner` in the first place. The
+two outlier filters were the anomaly, not the rest of the app; aligning them removes
+the inconsistency instead of introducing a new policy.
+
+Fix applied (2026-07-24): both outlier read-path filters now match the rest of the
+codebase —
+- `create_loaction`'s `region_qs` (`core/views.py:665`): `Region.objects.filter(owner=request.user)` → `Region.objects.all()`.
+- `multi_task_url()`'s `"locate"` branch `region_qs` (`core/utils.py:383`): `Region.objects.filter(owner=user)` → `Region.objects.all()`.
+
+The EDIT-permission `owner=request.user` scoping (`save_region`'s update path at
+`core/views.py:534`, `delete_region` at `core/views.py:593`, `update_region` at
+`core/views.py:604-606`) is unrelated to region *visibility* and was deliberately left
+unchanged — a region being visible to everyone does not imply everyone can edit it.
+A regression-guard test (`test_region_edit_permission_unchanged_for_non_owner` in
+`core/tests/test_views_smoke.py`) now proves this scoping still rejects a non-owner on
+all three paths.
+
+New tests added: `core/tests/test_utils_db.py`
+(`test_multi_task_url_locate_branch_shows_region_owned_by_other_user`,
+`test_multi_task_url_locate_branch_shows_all_regions_not_just_cross_owner`,
+`test_multi_task_url_locate_branch_shows_orphaned_region_with_no_owner`) and
+`core/tests/test_views_smoke.py`
+(`test_create_loaction_view_shows_region_owned_by_other_user`,
+`test_create_loaction_view_shows_all_regions_not_just_cross_owner`,
+`test_create_loaction_view_shows_orphaned_region_with_no_owner`,
+`test_create_loaction_region_visibility_same_for_existing_vs_new_location`,
+`test_create_loaction_view_empty_region_list_returns_200`,
+`test_region_edit_permission_unchanged_for_non_owner`) — each proves a cross-owner or
+orphaned (`owner=None`) region is a genuine member of the returned queryset, not just
+"non-empty".
+
+- Note: `save_region`'s global (not per-owner) duplicate-name check vs. the model's
+  per-owner `UniqueConstraint` remains a separate, already-flagged inconsistency —
+  unrelated to this fix, needs its own future decision.

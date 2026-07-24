@@ -138,7 +138,10 @@ def test_multi_task_url_locate_branch_with_gps(user_factory, region_factory):
     assert template == "core/multi_location_create.html"
     assert context["location_id"] == location.id
     assert context["image_location"] == location
-    assert list(context["regions"]) == list(Region.objects.filter(owner=owner))
+    # T06: regions are shared/unfiltered (not scoped to the calling user) --
+    # see T01/T03/T05a below for the actual discriminating oracles; this
+    # assertion alone would pass either way with only one Region row here.
+    assert list(context["regions"]) == list(Region.objects.all())
 
 
 @pytest.mark.django_db
@@ -154,3 +157,65 @@ def test_multi_task_url_locate_branch_without_gps_returns_none_location(user_fac
     assert template == "core/multi_location_create.html"
     assert context["image_location"] is None
     assert context["location_id"] == location.id
+
+
+# T01 -------------------------------------------------------------------
+@pytest.mark.django_db
+def test_multi_task_url_locate_branch_shows_region_owned_by_other_user(
+    user_factory, region_factory
+):
+    from types import SimpleNamespace
+
+    owner = user_factory(username="t01_owner")
+    other = user_factory(username="t01_other")
+    region = region_factory(owner=owner, name="T01Region")
+    location = Location.objects.create(latitude=46.0, longitude=8.0)
+    image = SimpleNamespace(location=location)
+
+    _template, context = multi_task_url("locate", image=image, user=other)
+
+    assert region in list(context["regions"])
+
+
+# T03 -------------------------------------------------------------------
+@pytest.mark.django_db
+def test_multi_task_url_locate_branch_shows_all_regions_not_just_cross_owner(
+    user_factory, region_factory
+):
+    """Discriminating counter: pre-fix only region_b (owned by the calling
+    user) would show. region_a's presence kills a mutant that flips the
+    filter direction (e.g. `owner != user`) instead of removing it."""
+    from types import SimpleNamespace
+
+    owner = user_factory(username="t03_owner")
+    other = user_factory(username="t03_other")
+    region_a = region_factory(owner=owner, name="T03RegionA")
+    region_b = region_factory(owner=other, name="T03RegionB")
+    location = Location.objects.create(latitude=46.0, longitude=8.0)
+    image = SimpleNamespace(location=location)
+
+    _template, context = multi_task_url("locate", image=image, user=other)
+
+    regions = list(context["regions"])
+    assert region_a in regions
+    assert region_b in regions
+
+
+# T05a --------------------------------------------------------------------
+@pytest.mark.django_db
+def test_multi_task_url_locate_branch_shows_orphaned_region_with_no_owner(
+    user_factory, region_factory
+):
+    """Kills a naive partial fix like
+    `filter(owner=user) | filter(owner__isnull=True)` -- only a true
+    `Region.objects.all()` passes this."""
+    from types import SimpleNamespace
+
+    owner = user_factory(username="t05a_owner")
+    orphan_region = region_factory(owner=None, name="T05A_ORPHAN")
+    location = Location.objects.create(latitude=46.0, longitude=8.0)
+    image = SimpleNamespace(location=location)
+
+    _template, context = multi_task_url("locate", image=image, user=owner)
+
+    assert orphan_region in list(context["regions"])

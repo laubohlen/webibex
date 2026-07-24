@@ -379,7 +379,7 @@ def multi_task_url(tool, image=None, user=None):
         # check if GPS is available, else return None
         if None in [image_location.latitude, image_location.longitude]:
             image_location = None
-        region_qs = Region.objects.filter(owner=user)
+        region_qs = Region.objects.all()
         template = "core/multi_location_create.html"
         task_specific_context = {
             "image_location": image_location,

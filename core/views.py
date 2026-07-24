@@ -662,7 +662,7 @@ def create_loaction(request, oid):
     # check if GPS is available, else return None
     if None in [image_location.latitude, image_location.longitude]:
         image_location = None
-    region_qs = Region.objects.filter(owner=request.user)
+    region_qs = Region.objects.all()
     return render(
         request,
         "core/location_create.html",
