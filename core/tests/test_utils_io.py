@@ -1,4 +1,4 @@
-"""T39-T46: I/O-boundary scenarios (image decode, RunPod HTTP, B2 download)."""
+"""T39-T49: I/O-boundary scenarios (image decode, RunPod HTTP, B2 download)."""
 
 from unittest import mock
 
@@ -145,3 +145,57 @@ def test_embed_new_chip_local_storage_and_cloud_endpoint_branch(
     create_mock.assert_called_once_with(ibex_chip=chip, embedding=[0.2, 0.3])
     get_tf_mock.assert_not_called()
     mock_b2.assert_not_called()
+
+
+# T47 -------------------------------------------------------------------
+def test_endpoint_inference_url_override_unset_uses_real_url(monkeypatch, mock_runpod):
+    monkeypatch.delenv("INFERENCE_ENDPOINT_URL_OVERRIDE", raising=False)
+    response_mock = mock.Mock()
+    response_mock.raise_for_status = mock.Mock()
+    response_mock.json.return_value = {
+        "output": {"output": {"output_tensor": [[0.1, 0.2, 0.3]]}}
+    }
+    mock_runpod.return_value = response_mock
+
+    endpoint_inference(input_b64_img={"input": {"b64": "abc"}})
+
+    assert (
+        mock_runpod.call_args.args[0]
+        == "https://api.runpod.ai/v2/test-runpod-endpoint-id/runsync"
+    )
+
+
+# T48 -------------------------------------------------------------------
+def test_endpoint_inference_url_override_set_used_verbatim(monkeypatch, mock_runpod):
+    monkeypatch.setenv("INFERENCE_ENDPOINT_URL_OVERRIDE", "http://localhost:8001/runsync")
+    response_mock = mock.Mock()
+    response_mock.raise_for_status = mock.Mock()
+    response_mock.json.return_value = {
+        "output": {"output": {"output_tensor": [[0.1, 0.2, 0.3]]}}
+    }
+    mock_runpod.return_value = response_mock
+
+    endpoint_inference(input_b64_img={"input": {"b64": "abc"}})
+
+    assert mock_runpod.call_args.args[0] == "http://localhost:8001/runsync"
+    assert "api.runpod.ai" not in mock_runpod.call_args.args[0]
+
+
+# T49 -------------------------------------------------------------------
+def test_endpoint_inference_url_override_empty_string_treated_as_unset(
+    monkeypatch, mock_runpod
+):
+    monkeypatch.setenv("INFERENCE_ENDPOINT_URL_OVERRIDE", "")
+    response_mock = mock.Mock()
+    response_mock.raise_for_status = mock.Mock()
+    response_mock.json.return_value = {
+        "output": {"output": {"output_tensor": [[0.1, 0.2, 0.3]]}}
+    }
+    mock_runpod.return_value = response_mock
+
+    endpoint_inference(input_b64_img={"input": {"b64": "abc"}})
+
+    assert (
+        mock_runpod.call_args.args[0]
+        == "https://api.runpod.ai/v2/test-runpod-endpoint-id/runsync"
+    )

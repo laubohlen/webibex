@@ -241,8 +241,21 @@ def endpoint_inference(
     endpoint_id: str = env("RUNPOD_ENDPOINT_ID"),
     endpoint_api_key: str = env("RUNPOD_API_KEY"),
 ):
-    # Make the POST request to the RunPod endpoint
+    # Read at CALL TIME (not as a third default-argument like endpoint_id /
+    # endpoint_api_key above): those two are read once at core.utils
+    # module-def time, which is correct for real credentials that don't
+    # change during a process's lifetime. This override exists specifically
+    # so tests/local dev can point at a local test server *without*
+    # restarting the process or re-importing the module -- a default-arg
+    # would freeze whatever was set (or unset) at import time.
+    endpoint_url_override = env("INFERENCE_ENDPOINT_URL_OVERRIDE", default=None)
+
+    # Empty string must be treated as "unset" (truthy check, not
+    # `is None`) so an accidentally-blank env var falls back to the
+    # real endpoint instead of sending requests to "".
     endpoint_url = f"https://api.runpod.ai/v2/{env("RUNPOD_ENDPOINT_ID")}/runsync"
+    if endpoint_url_override:
+        endpoint_url = endpoint_url_override
     headers = {
         "accept": "application/json",
         "authorization": env("RUNPOD_API_KEY"),
