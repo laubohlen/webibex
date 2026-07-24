@@ -336,3 +336,230 @@ orphaned (`owner=None`) region is a genuine member of the returned queryset, not
 - Note: `save_region`'s global (not per-owner) duplicate-name check vs. the model's
   per-owner `UniqueConstraint` remains a separate, already-flagged inconsistency —
   unrelated to this fix, needs its own future decision.
+
+## TODO — "Delete" tool in the multi-image Tools menu is unimplemented and crashes (found 2026-07-24)
+
+Found during the same manual e2e walkthrough (unrelated to the staticfiles refresh CR).
+Reproducible: Identification (or Animal) dashboard > select row(s) > Tools menu >
+Delete > `TypeError: cannot unpack non-iterable NoneType object` at `/unidentified/`
+(500).
+
+Root cause traced via the server traceback (`core/views.py:874`,
+`template, task_context = utils.multi_task_url(task, image=image, user=request.user)`)
+to `core/utils.py:372-399`, `multi_task_url()`:
+
+```python
+elif tool == "delete":
+    print("Deleting images")
+    # no deletion logic, no return -- falls through to implicit `return None`
+else:
+    print("No valid tool selected.")
+    # same problem -- any unrecognized tool value hits this too
+```
+
+Every other branch (`view`, `locate`, `landmark`) correctly `return (template, context)`;
+`delete` only prints a message and does nothing else. **This is not a working feature
+with a crash bug — it's an unfinished stub with zero actual deletion logic** (no
+`IbexImage`/`IbexChip`/`Embedding` row deletion, no file/storage cleanup, no
+confirmation UX), which additionally crashes instead of silently no-op'ing.
+
+**Open design question, not yet decided** (why not fixed this session — real behavior
+needs a deliberate decision, not a guess): what should Delete actually do?
+- Hard-delete the `IbexImage` row only, or cascade to its `IbexChip`/`Embedding` rows
+  and the underlying stored file (B2/local media)?
+- Any confirmation step before a destructive multi-select delete?
+- Soft-delete/archive instead of hard delete?
+
+Until that's decided, the crash itself is arguably the safer failure mode (loud 500,
+no data touched) versus a rushed implementation that silently does the wrong kind of
+delete.
+
+- Trigger: next session the professor/user wants the Delete tool working, or when
+  scoping a broader `core/views.py` coverage/cleanup pass (per the existing
+  coverage-expansion TODO above — `core/views.py` is at 18% coverage).
+
+## TODO — auth/session hardening settings missing (found 2026-07-24)
+
+Raised during a session discussion on login-system security (not a deep audit — a
+quick read of `webibex/settings.py` in full, already done this session for unrelated
+reasons, surfaced this gap). None of the following are set anywhere in `settings.py`,
+including inside the existing `if ENVIRONMENT == "production" or POSTGRES_LOCALLY ==
+True:` conditional blocks (lines ~137, ~194, ~235) that already gate other
+production-only config (DB, `STORAGES`, email backend):
+
+- `SESSION_COOKIE_SECURE` — session cookie sent over plain HTTP today even in
+  production (Railway serves HTTPS, so this is a real, closable gap, not theoretical).
+- `CSRF_COOKIE_SECURE` — same exposure for the CSRF cookie.
+- `SECURE_SSL_REDIRECT` — no server-side enforcement that requests upgrade to HTTPS.
+- `SECURE_HSTS_SECONDS` (+ `SECURE_HSTS_INCLUDE_SUBDOMAINS`/`SECURE_HSTS_PRELOAD` if
+  applicable) — no HSTS header, so a user's browser won't remember to prefer HTTPS.
+
+**Must be gated the same way existing production-only settings already are** (the
+`ENVIRONMENT == "production"` conditional) — setting `SESSION_COOKIE_SECURE`/
+`CSRF_COOKIE_SECURE`/`SECURE_SSL_REDIRECT` unconditionally would break local dev over
+plain `http://127.0.0.1:8000`, confirmed this session while running the app locally
+for other CRs' manual walkthroughs.
+
+Context for urgency: current threat model is a small (~20-50 non-concurrent users,
+per this doc's own Context section), trusted, internal research-tool user base — not
+a public-facing app. These are still cheap, standard hardening with no real downside
+once correctly gated to production, closing a real (if lower-probability-given-scale)
+exposure.
+
+- Trigger: next full security-remediation batch, or before any planned increase in
+  user base / exposure (e.g. if the app is ever opened beyond the current trusted
+  research group).
+
+## TODO — evaluate `allauth.mfa` (to evaluate, not decided)
+
+Raised in the same session discussion — `django-allauth` (already a dependency,
+patched to 65.14.1 per this doc's CVE remediation section) ships an optional
+`allauth.mfa` app for TOTP/WebAuthn multi-factor auth, not currently in
+`INSTALLED_APPS`. **Explicitly not decided or scoped yet** — needs evaluation before
+any implementation:
+
+- Does the professor/user base actually want MFA, or is it disproportionate friction
+  for a ~20-50 non-concurrent user trusted research group?
+- If yes: TOTP (authenticator app) vs. WebAuthn (hardware key/platform biometric) —
+  different UX and support burden.
+- Interacts with the auth-hardening TODO above (both touch the login/session surface)
+  but is a separate, larger decision — don't conflate scoping the two.
+
+- Trigger: professor/user explicitly requests stronger auth, or a future
+  security-remediation batch revisits the login system in depth.
+
+## TODO — `endpoint_inference()` has dead/unused parameters (found 2026-07-24)
+
+Found while reviewing the `INFERENCE_ENDPOINT_URL_OVERRIDE` addition to
+`core/utils.py:endpoint_inference()`. The function signature accepts
+`endpoint_id`/`endpoint_api_key` as parameters (def-time defaults via
+`env("RUNPOD_ENDPOINT_ID")`/`env("RUNPOD_API_KEY")`), but the function body
+never references either parameter — it re-reads
+`env("RUNPOD_ENDPOINT_ID")`/`env("RUNPOD_API_KEY")` directly inline instead,
+duplicating the same lookups. Pre-existing, predates this session (not
+introduced by the override change, confirmed by the Opus post-production
+review of that CR) — the only caller (`embed_new_chip()`) never passes these
+args, so it hasn't manifested as an observed bug, but it's misleading dead
+code: anyone calling `endpoint_inference(img, endpoint_id="x")` expecting
+that to take effect would be silently ignored.
+
+**Decided direction (user, 2026-07-24): remove the two parameters** — they
+add no value, the body's direct `env()` re-reads already are the real
+behavior. Keep the def-time-vs-call-time reasoning already documented inline
+for `INFERENCE_ENDPOINT_URL_OVERRIDE` (that one's read at call time
+deliberately; `RUNPOD_ENDPOINT_ID`/`RUNPOD_API_KEY` can stay as direct
+`env()` calls in the body, matching what the code already actually does).
+
+- Trigger: next time `core/utils.py`'s RunPod integration is touched, or a
+  dedicated small cleanup pass.
+
+## TODO — documentation gaps: docstrings/comments, user guide, developer docs (found 2026-07-24)
+
+Raised in a session discussion, not from a specific bug — this codebase has
+very little documentation beyond inline `print()`-style narration and this
+security-remediation doc itself. Three distinct gaps, each needing its own
+scoping:
+
+1. **Docstrings/comments on existing code** — most functions in
+   `core/utils.py`/`core/views.py` have no docstrings; the "why" behind
+   non-obvious decisions is scattered across session notes and this doc
+   rather than living next to the code (see `python.md`'s Decision
+   Documentation rule, already applied ad hoc for the
+   `INFERENCE_ENDPOINT_URL_OVERRIDE` addition this session — should become
+   the norm, not the exception).
+2. **End-user documentation** — a guided in-app tour for the actual users
+   (professor/research team) using the identification/upload/landmark flow.
+   User suggested evaluating **driver.js** (lightweight, no-dependency
+   JS library for step-by-step UI tours/spotlights) as a candidate —
+   not yet evaluated against alternatives or scoped.
+3. **Developer documentation** — onboarding-level docs for a future
+   maintainer (architecture overview, the Django apps' responsibilities,
+   the RunPod/B2 integration points, local dev setup) distinct from this
+   security-remediation tracking doc and the various dated session-notes/
+   CR docs under `docs/`, which are historical records, not reference docs.
+
+- Trigger: next dedicated documentation pass, or when onboarding a new
+  developer/maintainer makes the gap acutely felt.
+
+## TODO — evaluate reducing region detail exposed cross-owner (found 2026-07-24)
+
+Follow-up to the region-visibility fix above (region dropdown/picker now shows
+`Region.objects.all()` instead of only the current user's own regions — see the
+"region dropdown empty" TODO earlier in this doc). A `/post-production` security
+review (tier 4, Opus) flagged that this widening exposes more than region
+*names*: `templates/core/location_create.html` and `multi_location_create.html`
+render `origin_latitude`/`origin_longitude`/`radius` for **every** region shown,
+not just name+radius (unlike `region_overview.html`, which only ever showed
+name+radius). For an ibex conservation app, precise study-area coordinates carry
+real poaching-sensitivity if this ever extends beyond the current small,
+trusted, authenticated research team.
+
+**User's proposed direction, not yet decided**: reduce the info shown per
+region in the list/dropdown to name-only, revealing full coordinates only for
+the specific region a user actually selects.
+
+**Why this isn't a simple follow-up** — flagged during the same session as
+"could become complicated quickly":
+- The location-assignment UI is map-based (Leaflet/OSM), which likely needs
+  each region's coordinates to plot it as a circle/marker for the user to
+  visually place a location relative to — hiding coordinates for
+  not-yet-selected regions may break that visual-placement UX entirely, not
+  just hide harmless detail.
+- A "reveal full detail only on selection" pattern would likely need a small
+  AJAX endpoint (fetch one region's coordinates on demand) rather than a
+  template-level field hide — a real feature change, not a queryset tweak.
+- Whether this tradeoff (visual usability vs. coordinate exposure) is even
+  worth solving depends on how researchers actually use the picker day to
+  day — domain knowledge the professor has and this session doesn't.
+
+**Explicitly deferred pending professor/domain-owner direction** — do not
+implement a guess at this. The already-committed region-visibility fix itself
+is not blocked by this; this is a distinct, deeper follow-up.
+
+**Corollary if the direction instead comes back "private-by-design is
+correct"** (i.e. the region-visibility fix above should be reverted, not
+just this coordinate-detail question): `region_overview` (`core/views.py`,
+the "Region" Dashboard list page) has been doing `Region.objects.all()`
+**unfiltered since before this session** — pre-existing, untouched by the
+region-visibility fix. Reverting just the two dropdown-filter call sites
+would NOT make regions private end-to-end; `region_overview` would also need
+to become owner-scoped, or the app would end up with a private
+"assign region" step sitting next to a public "browse all regions" page —
+an inconsistent, half-private state. Any decision to go private needs to
+scope both places together, not just the two sites this session's fix
+touched.
+
+- Trigger: professor/domain-owner confirms whether coordinate-level exposure
+  is acceptable as-is, or specifies which UX tradeoff they'd prefer; if the
+  answer is "go private instead," re-scope to include `region_overview`.
+
+## TODO — IDOR: `location-id`/`oid` unauthenticated-relative in `save_image_location`/`create_loaction` (found 2026-07-24)
+
+Found by a Fable5 adversarial review run against the region-visibility fix CR
+(confirmed pre-existing, NOT introduced or worsened by that fix — the review's
+actual verdict on the fix itself was clean, zero bypasses).
+
+- `save_image_location` (`core/views.py:617-634`, `@login_required` only):
+  `get_object_or_404(Location, pk=location_id)` — `location_id` comes straight
+  from the POST body with **no check that this Location belongs to the
+  caller**. Any authenticated user can POST an arbitrary `location-id` and
+  overwrite another user's image's `latitude`/`longitude`/`source`/`region`.
+  `Location` has no direct `owner` field (ownership is only via the
+  `IbexImage.location` OneToOne) — no existing check ties the two together
+  here.
+- `create_loaction` (`core/views.py:653`, `@login_required` only):
+  `get_object_or_404(IbexImage, id=oid)` — same shape, no owner filter on the
+  image `oid` — any authenticated user can load any other user's image's
+  locate/landmark page via a guessable/enumerable integer id.
+
+Both are pre-existing (predate this session), independent of the region
+queryset widening (they read `location-id`/`image-id`/`oid` directly from the
+request, never from `region_qs`). Given the app's current threat model (~20-50
+trusted, authenticated researchers, not public-facing), the practical impact
+is scoped to insiders — but it's a real cross-user write/read primitive worth
+closing, and needs the same "shared vs. private" design input as the region
+questions above (are images/locations meant to be editable by any
+authenticated user, or only their owner/creator?).
+
+- Trigger: next full security-remediation batch, or before this app's user
+  base or threat model changes from the current small trusted group.
