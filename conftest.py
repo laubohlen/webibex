@@ -14,24 +14,6 @@ hook-ordering -- see the django.setup() call below for why that matters).
 """
 
 import os
-import sys
-
-# ENVIRONMENT DRIFT WORKAROUND: the installed setuptools (83.0.0) no longer
-# ships pkg_resources, but requirements.txt pins setuptools==78.1.1 (which
-# does). django-filer -> django-polymorphic imports pkg_resources at module
-# scope. Re-pinning the venv to the requirements.txt version requires network
-# access this sandbox doesn't have, and requirements.txt's setuptools line is
-# explicitly out of scope (conflicts with a pending git stash). pip vendors a
-# fully standalone, functional copy of pkg_resources -- reuse it here so
-# third-party imports resolve without touching requirements.txt or production
-# source. Remove once the venv is re-synced to the pinned setuptools version.
-if "pkg_resources" not in sys.modules:
-    try:
-        import pkg_resources  # noqa: F401
-    except ModuleNotFoundError:
-        import pip._vendor.pkg_resources as _pkg_resources
-
-        sys.modules["pkg_resources"] = _pkg_resources
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "webibex.settings")
 os.environ.setdefault("ENVIRONMENT", "test")
