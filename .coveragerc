@@ -1,0 +1,11 @@
+[run]
+omit =
+    */migrations/*
+    core/embedding_model/*
+    db_management/*
+    tmp/*
+    node/*
+    */tests/*
+    manage.py
+    webibex/asgi.py
+    webibex/wsgi.py

@@ -1,0 +1,11 @@
+# Dev/test-only dependencies -- never shipped to Railway (which only installs
+# requirements.txt via its default Python buildpack; there's no railway.toml
+# or nixpacks.toml to customize that, and requirements.txt has no extras
+# syntax to mark these optional). Keep this file's contents out of
+# requirements.txt.
+#
+# Local install: pip install -r requirements.txt -r requirements-dev.txt
+#              (or: uv pip install -r requirements.txt -r requirements-dev.txt)
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-django==4.12.0

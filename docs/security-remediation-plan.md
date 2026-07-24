@@ -177,6 +177,17 @@ is currently no way to apply the same hardened-base-image treatment already done
   bring them in line.
 - Trigger: next security-remediation batch, or whenever the `samgis-be` hardening
   pattern is revisited for this project.
+- **Dev/prod dependency separation** (found 2026-07-23, adding pytest coverage):
+  Railway's default Nixpacks builder only installs `requirements.txt` — there's no
+  `railway.toml`/`nixpacks.toml` here to declare a build-only or optional dependency
+  group, and plain `requirements.txt` has no extras syntax to mark packages
+  dev-only. Test deps (`pytest`, `pytest-django`, `pytest-cov`) were moved to a
+  new `requirements-dev.txt` instead, installed alongside for local dev
+  (`pip install -r requirements.txt -r requirements-dev.txt`) but never shipped to
+  Railway. Study whether a `railway.toml`/`nixpacks.toml` (or migrating to
+  `pyproject.toml` with a `[dependency-groups]`/`[project.optional-dependencies]`
+  split, `uv`-native) would let Railway itself skip a declared dev group instead of
+  relying on file-split-by-convention.
 
 ## TODO — stale `staticfiles/` vs. current Django version (found 2026-07-23)
 
