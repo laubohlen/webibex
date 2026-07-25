@@ -291,7 +291,7 @@ a freshly created superuser) legitimately gets an empty queryset — not a rende
 not related to the staticfiles refresh, the filter is working exactly as written.
 
 **Confirmed NOT a regression** (git blame, checked 2026-07-24): both `owner=` filters
-(`core/views.py:665`, `core/utils.py:383`) date to `46a66a8f`/`a6724250`
+(`core/views.py:665`, `core/utils.py:382`) date to `46a66a8f`/`a6724250`
 (2025-02-17/2025-02-27, original developer) — over a year old, predates every commit
 touched this session. The "it worked before" observation is explained by session
 context, not a code change: a prior manual test almost certainly used the actual
@@ -309,7 +309,7 @@ the inconsistency instead of introducing a new policy.
 Fix applied (2026-07-24): both outlier read-path filters now match the rest of the
 codebase —
 - `create_loaction`'s `region_qs` (`core/views.py:665`): `Region.objects.filter(owner=request.user)` → `Region.objects.all()`.
-- `multi_task_url()`'s `"locate"` branch `region_qs` (`core/utils.py:383`): `Region.objects.filter(owner=user)` → `Region.objects.all()`.
+- `multi_task_url()`'s `"locate"` branch `region_qs` (`core/utils.py:382`): `Region.objects.filter(owner=user)` → `Region.objects.all()`.
 
 The EDIT-permission `owner=request.user` scoping (`save_region`'s update path at
 `core/views.py:534`, `delete_region` at `core/views.py:593`, `update_region` at
