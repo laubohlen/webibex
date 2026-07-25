@@ -20,6 +20,7 @@ from environ import Env
 env = Env()
 Env.read_env()
 ENVIRONMENT = env("ENVIRONMENT", default="production")
+POSTGRES_LOCALLY = False
 
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
@@ -46,6 +47,19 @@ else:
 ALLOWED_HOSTS = ["wibex.up.railway.app", "127.0.0.1", "localhost:8000"]
 
 CSRF_TRUSTED_ORIGINS = ["https://wibex.up.railway.app"]
+
+if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    # Railway terminates TLS at its edge and forwards plain HTTP; without this,
+    # SECURE_SSL_REDIRECT would redirect-loop.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    # Conservative starting value; ratchet to 31536000 after confirming stability.
+    # SECURE_HSTS_INCLUDE_SUBDOMAINS/PRELOAD deliberately omitted -- no
+    # subdomains in ALLOWED_HOSTS, and preload isn't possible for a
+    # railway.app subdomain anyway.
+    SECURE_HSTS_SECONDS = 3600
 
 AUTHENTICATION_BACKENDS = [
     # Needed to login by username in Django admin, regardless of `allauth`
@@ -133,7 +147,6 @@ DATABASES = {
     }
 }
 
-POSTGRES_LOCALLY = False
 if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
     DATABASES["default"] = dj_database_url.parse(env("DATABASE_URL"))
 

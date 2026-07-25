@@ -9,7 +9,7 @@ core.utils module-def time -- even earlier than a call-time read.
 All required env vars are therefore set here, at MODULE SCOPE, before
 Django settings get force-loaded and before django.setup() runs (this
 conftest.py is always imported before any nested-directory conftest.py,
-e.g. core/tests/conftest.py, regardless of pytest-django's own internal
+e.g. tests/conftest.py, regardless of pytest-django's own internal
 hook-ordering -- see the django.setup() call below for why that matters).
 """
 
@@ -31,11 +31,11 @@ os.environ.setdefault("RUNPOD_API_KEY", "test-runpod-api-key")
 # never be picked up by pytest's collection glob.
 collect_ignore = ["db_management/test.py"]
 
-# EXPLICIT django.setup(): once `core/tests` (or any nested test dir) is part
-# of the collection args, pytest treats `core/tests/conftest.py` as an
+# EXPLICIT django.setup(): once `tests` (or any nested test dir) is part
+# of the collection args, pytest treats `tests/conftest.py` as an
 # "initial" conftest too and loads it in the same early phase as this root
 # conftest.py -- but ahead of pytest-django's own `_setup_django()` hookimpl,
-# which normally populates the app registry. `core/tests/conftest.py` imports
+# which normally populates the app registry. `tests/conftest.py` imports
 # `filer.models` at module scope (needed for Folder-backed fixtures), which
 # needs the app registry populated *now*, not whenever pytest-django gets to
 # it. Calling django.setup() ourselves, right after env vars are set and

@@ -378,7 +378,7 @@ delete.
   scoping a broader `core/views.py` coverage/cleanup pass (per the existing
   coverage-expansion TODO above — `core/views.py` is at 18% coverage).
 
-## TODO — auth/session hardening settings missing (found 2026-07-24)
+## TODO — auth/session hardening settings missing (found 2026-07-24, RESOLVED 2026-07-25)
 
 Raised during a session discussion on login-system security (not a deep audit — a
 quick read of `webibex/settings.py` in full, already done this session for unrelated
@@ -409,6 +409,44 @@ exposure.
 - Trigger: next full security-remediation batch, or before any planned increase in
   user base / exposure (e.g. if the app is ever opened beyond the current trusted
   research group).
+
+Fix applied (2026-07-25): `webibex/settings.py` now sets all 4 requested settings
+(plus `SECURE_PROXY_SSL_HEADER`, needed alongside `SECURE_SSL_REDIRECT` — Railway
+terminates TLS at its edge and forwards plain HTTP, so without it the redirect would
+loop) inside a new `if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:` block
+(`webibex/settings.py:51-62`), placed right after `CSRF_TRUSTED_ORIGINS` and before
+`AUTHENTICATION_BACKENDS` — the same gate condition already used by the DB/`STORAGES`/
+email blocks (R2 rationale: excluding dev/test avoids the plain
+`http://127.0.0.1:8000` breakage flagged above):
+
+- `SESSION_COOKIE_SECURE = True`
+- `CSRF_COOKIE_SECURE = True`
+- `SECURE_SSL_REDIRECT = True`
+- `SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")`
+- `SECURE_HSTS_SECONDS = 3600` (conservative starting value — ratchet to `31536000`
+  after confirming stability; `SECURE_HSTS_INCLUDE_SUBDOMAINS`/`SECURE_HSTS_PRELOAD`
+  deliberately omitted, no subdomains in `ALLOWED_HOSTS` and preload submission isn't
+  possible for a `railway.app` subdomain anyway).
+
+New tests added: `core/tests/test_settings_security_hardening.py` —
+`test_hardening_settings_present_with_correct_values_under_environment_production`
+(T01, plus T04's `SECURE_PROXY_SSL_HEADER`/`SECURE_SSL_REDIRECT` coupling check),
+`test_hardening_settings_absent_under_ambient_environment_test` (T02, the
+no-regression keystone — asserts none of the 5 settings exist under the ambient
+pytest `ENVIRONMENT=test`), `test_hardening_settings_absent_under_environment_development`
+(T03, proves local dev over plain HTTP is unaffected). T05
+(`POSTGRES_LOCALLY == True` alternate path) and T06 (`manage.py check --deploy`)
+were not implemented — T05 is dead in practice (`POSTGRES_LOCALLY` is a hardcoded
+dev-only toggle, never `True` in prod/CI) and T06 is a manual verification step, not
+a scripted test.
+
+Note: implementing this surfaced a real pre-existing ordering bug — `POSTGRES_LOCALLY
+= False` was defined at (old) line 136, *after* the `CSRF_TRUSTED_ORIGINS`/
+`AUTHENTICATION_BACKENDS` span where the new hardening block needed to reference it.
+Moved to immediately after `ENVIRONMENT = env("ENVIRONMENT", default="production")`
+(`webibex/settings.py:23`) as part of this fix — not part of the original TODO scope,
+but a genuine `NameError`-on-import risk for any code inserted between its old
+definition and its first use, closed while touching this area.
 
 ## TODO — evaluate `allauth.mfa` (to evaluate, not decided)
 
@@ -563,3 +601,64 @@ authenticated user, or only their owner/creator?).
 
 - Trigger: next full security-remediation batch, or before this app's user
   base or threat model changes from the current small trusted group.
+
+## TODO — behavioral gaps in auth-hardening test coverage (found 2026-07-25)
+
+Surfaced by a `/request-adherence` check run against the auth/session
+hardening CR (see the RESOLVED entry above) — the requested login/logout/
+password-change coverage (`tests/webibex/test_manual_login_logout_check.py`)
+is complete, but three related behaviors were never explicitly requested and
+remain untested:
+
+- **`SECURE_SSL_REDIRECT`'s actual redirect behavior**: all
+  simulated-production tests use Django's test `Client(..., secure=True)`,
+  which makes the request already look secure and bypasses the redirect
+  path entirely. The 301/302-on-plain-HTTP behavior itself has no test.
+  Lower risk since Railway's own edge independently enforces HTTPS
+  (confirmed via Railway's public-networking docs during this CR) — this
+  setting is defense-in-depth, not the primary guarantee.
+- **`Strict-Transport-Security` response header presence**:
+  `SECURE_HSTS_SECONDS=3600` is asserted as a settings *value*
+  (`tests/webibex/test_settings_security_hardening.py`), but no test
+  confirms Django's `SecurityMiddleware` actually emits the header on a
+  live response.
+- **CSRF failure case** (missing/invalid token) on an authenticated POST:
+  only the happy path (valid CSRF) is tested for password-change; the
+  reject-on-invalid-token path isn't. Likely already covered by Django/
+  allauth's own test suite rather than anything this session's code
+  touched.
+
+- Trigger: next dedicated test-coverage pass on the auth/session surface,
+  or if any of these three specifically becomes suspect during a future
+  auth-related bug investigation.
+
+## TODO — ruff baseline findings, first run on this codebase (found 2026-07-25)
+
+`pyright`/`ruff` were added as dev dependencies this session
+(`requirements-dev.txt`) as part of the `/post-production` tier-4 gate for
+the auth-hardening CR. This is ruff's first-ever run on this codebase — no
+`ruff.toml`/`[tool.ruff]` config exists yet, so it ran with bare defaults,
+not even the `python.md`-recommended baseline config.
+
+8 findings, all confirmed **pre-existing** (verified via `git diff` — none
+on lines touched by this session's changes):
+
+- `conftest.py`: 4x `RUF100` unused `# noqa: E402` directives (E402 isn't
+  enabled in ruff's default rule set, so the pre-existing noqa comments are
+  now flagged as unnecessary).
+- `tests/core/test_models.py:6`: `F401` unused import (`Region`).
+- `tests/core/test_models.py:61`: `SIM117` nested `with` statements
+  (mergeable).
+- `tests/core/test_utils_pure.py:17`: `I001` import block unsorted.
+- `webibex/settings.py:13`: `I001` import block unsorted.
+
+All 8 are marked fixable by `ruff --fix` (mechanical, low-risk). Left
+untouched this session per minimal-blast-radius discipline — these files
+were either only comment-edited (`conftest.py`) or pure `git mv` renames
+with zero content change (the `tests/core/*.py` files), so "fixing" them
+now would mean modifying files outside this session's actual scope.
+
+- Trigger: next dedicated lint-cleanup pass, or set up a `ruff.toml`
+  matching `python.md`'s recommended baseline config (which would enable
+  E402 and make the noqa comments meaningful again) and run `ruff --fix`
+  project-wide as its own CR.
