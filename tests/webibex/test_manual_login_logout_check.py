@@ -195,3 +195,87 @@ def test_real_login_then_password_change_flow_under_simulated_production_setting
         secure=True,
     )
     assert relogin_with_new_password.context["user"].is_authenticated
+
+
+@override_settings(
+    SESSION_COOKIE_SECURE=True,
+    CSRF_COOKIE_SECURE=True,
+    SECURE_SSL_REDIRECT=True,
+    SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
+    SECURE_HSTS_SECONDS=3600,
+)
+def test_plain_http_request_redirects_to_https_under_simulated_production_settings():
+    """SECURE_SSL_REDIRECT's actual redirect behavior. Every other
+    production-simulation test in this file passes secure=True, which makes
+    the request already look secure to Django and never exercises the
+    redirect path itself.
+    """
+    client = Client()
+
+    response = client.get(reverse("account_login"))
+
+    assert response.status_code == 301
+    assert response.url.startswith("https://")
+
+
+@override_settings(
+    SESSION_COOKIE_SECURE=True,
+    CSRF_COOKIE_SECURE=True,
+    SECURE_SSL_REDIRECT=True,
+    SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
+    SECURE_HSTS_SECONDS=3600,
+)
+def test_strict_transport_security_header_present_on_secure_response(db):
+    """Confirms SecurityMiddleware actually emits the HSTS header on a live
+    response. test_settings_security_hardening.py only asserts
+    SECURE_HSTS_SECONDS as a settings *value* via importlib.reload -- that
+    module reload never runs SecurityMiddleware, so it can't prove the
+    header itself shows up on a response.
+
+    Needs `db`: rendering the login page (unlike the redirect test above,
+    which returns before the view runs) touches the database via allauth's
+    account_login view.
+    """
+    client = Client()
+
+    response = client.get(reverse("account_login"), secure=True)
+
+    assert response.status_code == 200
+    assert response.headers["Strict-Transport-Security"] == "max-age=3600"
+
+
+def test_password_change_rejects_post_with_invalid_csrf_token(user_factory):
+    """The reject-on-invalid-token path for an authenticated POST.
+    test_real_login_then_password_change_flow_under_ambient_test_environment
+    only covers the happy path (valid CSRF, via the default Client's
+    disabled CSRF enforcement).
+    """
+    user_factory(username="csrfchecker", password="Old-Pass-12345")
+    login_client = Client()
+    login_response = login_client.post(
+        reverse("account_login"),
+        {"login": "csrfchecker@example.invalid", "password": "Old-Pass-12345"},
+        follow=True,
+    )
+    assert login_response.context["user"].is_authenticated
+
+    strict_client = Client(enforce_csrf_checks=True)
+    strict_client.cookies["sessionid"] = login_client.cookies["sessionid"].value
+    # CsrfViewMiddleware rejects an invalid token before the view runs, so a
+    # bad-token POST would 403 regardless of auth state -- this GET proves
+    # the copied session cookie actually authenticated strict_client, so the
+    # 403 below is a true "authenticated POST, bad CSRF token" rejection.
+    change_page = strict_client.get(reverse("account_change_password"))
+    assert change_page.status_code == 200
+
+    response = strict_client.post(
+        reverse("account_change_password"),
+        {
+            "oldpassword": "Old-Pass-12345",
+            "password1": "New-Pass-67890",
+            "password2": "New-Pass-67890",
+            "csrfmiddlewaretoken": "invalid-token-value",
+        },
+    )
+
+    assert response.status_code == 403

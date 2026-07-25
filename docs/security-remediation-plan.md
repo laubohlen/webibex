@@ -602,7 +602,7 @@ authenticated user, or only their owner/creator?).
 - Trigger: next full security-remediation batch, or before this app's user
   base or threat model changes from the current small trusted group.
 
-## TODO — behavioral gaps in auth-hardening test coverage (found 2026-07-25)
+## TODO — behavioral gaps in auth-hardening test coverage (found 2026-07-25, RESOLVED 2026-07-25)
 
 Surfaced by a `/request-adherence` check run against the auth/session
 hardening CR (see the RESOLVED entry above) — the requested login/logout/
@@ -631,6 +631,29 @@ remain untested:
 - Trigger: next dedicated test-coverage pass on the auth/session surface,
   or if any of these three specifically becomes suspect during a future
   auth-related bug investigation.
+
+Fix applied (2026-07-25): all three added to
+`tests/webibex/test_manual_login_logout_check.py`, test-only changes (no
+production code touched) —
+
+- `test_plain_http_request_redirects_to_https_under_simulated_production_settings`:
+  a plain (non-`secure=True`) GET under the full simulated-production
+  `override_settings` block now asserts a 301 with an `https://`-prefixed
+  `Location`, exercising the redirect path the existing `secure=True` tests
+  structurally cannot reach.
+- `test_strict_transport_security_header_present_on_secure_response`
+  (needs `db` — rendering the login page hits the database, unlike the
+  redirect test above which returns before the view runs): asserts
+  `response.headers["Strict-Transport-Security"] == "max-age=3600"` on a
+  live `secure=True` response.
+- `test_password_change_rejects_post_with_invalid_csrf_token`: logs in with
+  a normal `Client()`, copies the session cookie into a second
+  `Client(enforce_csrf_checks=True)`, then POSTs the password-change form
+  with a deliberately wrong `csrfmiddlewaretoken` and asserts 403.
+
+All 10 tests in the two auth-hardening test files pass; full suite (159
+passed, 1 skipped, 1 xfailed) and `ruff check` on the changed file are
+clean.
 
 ## TODO — ruff baseline findings, first run on this codebase (found 2026-07-25)
 
