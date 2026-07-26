@@ -1,5 +1,6 @@
 """T39-T49: I/O-boundary scenarios (image decode, RunPod HTTP, B2 download)."""
 
+import base64
 from unittest import mock
 
 import numpy as np
@@ -116,14 +117,12 @@ def test_embed_new_chip_cloud_storage_and_cloud_endpoint_branch(
         override_settings(POSTGRES_LOCALLY=True, AWS_LOCATION="media"),
         mock.patch("core.utils.endpoint_inference", return_value=[0.1, 0.2]) as inference_mock,
         mock.patch("core.utils.Embedding.objects.create") as create_mock,
-        mock.patch("core.utils.get_tf") as get_tf_mock,
     ):
         embed_new_chip(chip)
 
     mock_b2.assert_called_once()
     inference_mock.assert_called_once()
     create_mock.assert_called_once_with(ibex_chip=chip, embedding=[0.1, 0.2])
-    get_tf_mock.assert_not_called()
 
 
 # T46 -------------------------------------------------------------------------
@@ -137,14 +136,128 @@ def test_embed_new_chip_local_storage_and_cloud_endpoint_branch(
         override_settings(MEDIA_ROOT=str(tmp_path)),
         mock.patch("core.utils.endpoint_inference", return_value=[0.2, 0.3]) as inference_mock,
         mock.patch("core.utils.Embedding.objects.create") as create_mock,
-        mock.patch("core.utils.get_tf") as get_tf_mock,
     ):
         embed_new_chip(chip)
 
     inference_mock.assert_called_once()
     create_mock.assert_called_once_with(ibex_chip=chip, embedding=[0.2, 0.3])
-    get_tf_mock.assert_not_called()
     mock_b2.assert_not_called()
+
+
+# R2 keystone --------------------------------------------------------------
+@pytest.mark.parametrize(
+    "settings_overrides",
+    [
+        {"POSTGRES_LOCALLY": True},
+        {"ENVIRONMENT": "production"},
+    ],
+)
+def test_embed_new_chip_cloud_branch_taken_regardless_of_how_database_is_local_becomes_false(
+    mock_b2, tiny_png_bytes, ibex_chip_stub_factory, settings_overrides
+):
+    """Post-deletion regression guard: the cloud branch is taken whenever
+    database_is_local is False, regardless of which setting makes it so.
+    This doesn't itself prove pre/post-deletion equivalence (model_is_local
+    no longer exists to compare against) -- that equivalence is a logical
+    argument (model_is_local was always False, since ENDPOINT_LOCALLY was
+    hardcoded True), documented in docs/security-remediation-plan.md's
+    "TensorFlow removal" Resolved note, not something a single post-deletion
+    test can demonstrate on its own."""
+    mock_b2.return_value = tiny_png_bytes
+    chip = ibex_chip_stub_factory(name="chip2.png")
+
+    with (
+        override_settings(AWS_LOCATION="media", **settings_overrides),
+        mock.patch("core.utils.endpoint_inference", return_value=[0.1, 0.2]),
+        mock.patch("core.utils.Embedding.objects.create"),
+    ):
+        embed_new_chip(chip)
+
+    mock_b2.assert_called_once()
+
+
+def test_embed_new_chip_cloud_branch_b2_download_returns_none_raises_value_error(
+    mock_b2, ibex_chip_stub_factory
+):
+    mock_b2.return_value = None
+    chip = ibex_chip_stub_factory(name="chip3.png")
+
+    with (
+        override_settings(POSTGRES_LOCALLY=True, AWS_LOCATION="media"),
+        mock.patch("core.utils.endpoint_inference") as inference_mock,
+        mock.patch("core.utils.Embedding.objects.create") as create_mock,
+        pytest.raises(ValueError, match="Failed to download image from Backblaze B2"),
+    ):
+        embed_new_chip(chip)
+
+    inference_mock.assert_not_called()
+    create_mock.assert_not_called()
+
+
+def test_embed_new_chip_cloud_branch_corrupt_bytes_raises_value_error(
+    mock_b2, ibex_chip_stub_factory
+):
+    mock_b2.return_value = b"not a real image"
+    chip = ibex_chip_stub_factory(name="chip4.png")
+
+    with (
+        override_settings(POSTGRES_LOCALLY=True, AWS_LOCATION="media"),
+        mock.patch("core.utils.endpoint_inference") as inference_mock,
+        mock.patch("core.utils.Embedding.objects.create") as create_mock,
+        pytest.raises(ValueError, match="Failed to decode image"),
+    ):
+        embed_new_chip(chip)
+
+    inference_mock.assert_not_called()
+    create_mock.assert_not_called()
+
+
+def test_embed_new_chip_local_branch_missing_file_raises_file_not_found_error(
+    tmp_path, ibex_chip_stub_factory, mock_b2
+):
+    """Pins CURRENT behavior: a raw FileNotFoundError, no domain-error wrapping.
+    Do not "fix" this here -- just document/pin it."""
+    chip = ibex_chip_stub_factory(name="missing.png")
+
+    with (
+        override_settings(MEDIA_ROOT=str(tmp_path)),
+        pytest.raises(FileNotFoundError),
+    ):
+        embed_new_chip(chip)
+
+    mock_b2.assert_not_called()
+
+
+def test_core_utils_no_longer_exposes_get_tf():
+    import core.utils
+
+    assert not hasattr(core.utils, "get_tf")
+    assert not hasattr(core.utils, "_tf")
+
+
+def test_settings_no_longer_exposes_endpoint_locally():
+    from django.conf import settings
+
+    assert not hasattr(settings, "ENDPOINT_LOCALLY")
+
+
+def test_embed_new_chip_cloud_branch_passes_correct_base64_payload_to_endpoint_inference(
+    mock_b2, tiny_png_bytes, ibex_chip_stub_factory
+):
+    mock_b2.return_value = tiny_png_bytes
+    chip = ibex_chip_stub_factory(name="chip5.png")
+
+    with (
+        override_settings(POSTGRES_LOCALLY=True, AWS_LOCATION="media"),
+        mock.patch("core.utils.endpoint_inference", return_value=[0.1, 0.2]) as inference_mock,
+        mock.patch("core.utils.Embedding.objects.create"),
+    ):
+        embed_new_chip(chip)
+
+    expected_b64 = base64.b64encode(tiny_png_bytes).decode("utf-8")
+    assert inference_mock.call_args.kwargs["input_b64_img"] == {
+        "input": {"b64": expected_b64}
+    }
 
 
 # T47 -------------------------------------------------------------------

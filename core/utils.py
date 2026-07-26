@@ -30,25 +30,6 @@ Env.read_env()
 
 ENVIRONMENT = env("ENVIRONMENT", default="production")
 
-# model_is_local = settings.ENVIRONMENT != "production" and not settings.GCP_MODEL_LOCALLY
-# if model_is_local:
-#     import tensorflow as tf
-
-#     print(tf.__version__)
-
-_tf = None
-
-
-def get_tf():
-    global _tf
-    if _tf is None:
-        import tensorflow as tf  # type: ignore (supress VSCode warning)
-
-        print(tf.__version__)
-        _tf = tf
-    return _tf
-
-
 # snipet from https://github.com/krasch/simple_landmarks
 # coordinates are sent as slightly weird URL parameters (e.g. 0.png?214,243)
 # parse them, will crash server if they are coming in unexpected format
@@ -282,17 +263,12 @@ def endpoint_inference(
 
 
 def embed_new_chip(ibex_chip):
-    chip_size = (288, 144)
-
     # Determine if working locally or in production
     database_is_local = not (
         settings.ENVIRONMENT == "production" or settings.POSTGRES_LOCALLY == True
     )
-    model_is_local = not (
-        settings.ENVIRONMENT == "production" or settings.ENDPOINT_LOCALLY == True
-    )
 
-    if (not database_is_local) and (not model_is_local):
+    if not database_is_local:
         # get image from cloud storage and run on embedding endpoint as in production
         chip_bucket_path = os.path.join(settings.AWS_LOCATION, ibex_chip.file.name)
         img_object = b2_utils.download_file(bucket_file_path=chip_bucket_path)
@@ -315,38 +291,6 @@ def embed_new_chip(ibex_chip):
             input_b64_img=model_input,
         )
         print("Embedded on model endpoint.")
-
-    elif database_is_local and model_is_local:
-        tf = get_tf()
-        # Everything runs locally (complete dev environment)
-        chip_path = os.path.join(settings.MEDIA_ROOT, ibex_chip.file.name)
-        chip_bytes = tf.io.read_file(chip_path)
-        chip_image = tf.image.decode_jpeg(chip_bytes, channels=3)
-        print("Image loaded from local storage.")
-        chip_resized = tf.image.resize(chip_image, chip_size)
-        chip_expanded = tf.expand_dims(chip_resized, axis=0)
-        model = tf.saved_model.load("core/embedding_model/")
-        embedder = model.signatures["serving_default"]
-        output = embedder(chip_expanded)["output_tensor"].numpy().tolist()[0]
-        print("Embedded on local model.")
-
-    elif (not database_is_local) and model_is_local:
-        tf = get_tf()
-        # get image from cloud storage and run with local model
-        chip_bucket_path = os.path.join(settings.AWS_LOCATION, ibex_chip.file.name)
-        img_object = b2_utils.download_file(bucket_file_path=chip_bucket_path)
-        if img_object is None:
-            raise ValueError("Failed to download image from Backblaze B2.")
-        # Convert the downloaded content (bytes) to a NumPy array
-        chip_array = np.frombuffer(img_object, np.uint8)
-        # Decode the image from the NumPy array to check that it's valid
-        chip_image = cv2.imdecode(chip_array, cv2.IMREAD_COLOR)
-        chip_resized = tf.image.resize(chip_image, chip_size)
-        chip_expanded = tf.expand_dims(chip_resized, axis=0)
-        model = tf.saved_model.load("core/embedding_model/")
-        embedder = model.signatures["serving_default"]
-        output = embedder(chip_expanded)["output_tensor"].numpy().tolist()[0]
-        print("Embedded on local model.")
 
     else:
         # get image from local storage but run on embedding endpoint

@@ -64,6 +64,27 @@ not bump-and-verify, not fold into the larger ibex_stambecchi migration. Product
 doesn't use it, and TF1→TF2 compatibility for this exact model is already proven working
 elsewhere (91.27% mAP, per `ibex_stambecchi/docs/migration-plan.md`). Low-risk, low-cost.
 
+**Resolved (2026-07-26)**: the deferred Lauren conversation happened and RunPod access
+is confirmed. User's call (common-sense, not a new investigation): real e2e manual
+tests already exercise the actual RunPod inference container (via
+`INFERENCE_ENDPOINT_URL_OVERRIDE` in `core/utils.py`'s `endpoint_inference()`), so the
+old local-dev TF1 fallback path is no longer needed for anything. `get_tf()`/`_tf`/
+`model_is_local`/`ENDPOINT_LOCALLY` removed from `core/utils.py`/`webibex/settings.py`;
+the orphaned 100MB `core/embedding_model/` TF1 SavedModel binary tree deleted. Turned
+out to be even lower-risk than scoped: `ENDPOINT_LOCALLY` was hardcoded `True`, so
+`model_is_local` evaluated to `False` in every environment — the local-model branches
+were already unreachable dead code, not just rarely used. Two extra stale references
+found and cleaned up while verifying no dangling pointers remained: `.gitignore`'s dead
+commented-out line and `.coveragerc`'s now-pointless `omit` entry, both referencing the
+deleted directory. `core/test_model.py` (the standalone dev script from the original
+finding above) was already removed in an earlier, unrelated commit (`2bde17e`) —
+nothing to do there. Added 6 new regression tests to `tests/core/test_utils_io.py`
+(branch-selection equivalence proving the `if` simplification is behavior-identical,
+plus previously-uncovered error paths: B2 download returning `None`, undecodable/
+corrupt image bytes, missing local file) alongside 2 structural regression guards
+(`hasattr` checks confirming `get_tf`/`ENDPOINT_LOCALLY` are gone — both went red
+against pre-deletion code, green after, proving they're real guards not tautologies).
+
 ### OpenStreetMap ToS exposure (CR-2)
 
 webibex hits `tile.openstreetmap.org/{z}/{x}/{y}.png` directly via Leaflet in 7 templates
@@ -97,7 +118,7 @@ existing threshold), not new architecture.
 | dcg profile fix | done | already merged to main |
 | Routine CVE bumps (Django, pillow, django-allauth, django-filer, requests, lxml, setuptools) | **done (2026-07-09)** | commit `480607b` — final versions in the table below |
 | boto3/botocore/urllib3 triangle | ~1.5-2.5d | **blocked on B2 test bucket** — root cause + fix path documented in `tmp/memo-questions-for-lauren.md` item #5, not yet applied |
-| TensorFlow removal | ~0.5d | **deferred to 2026-07-17** — user talking to original developer (Lauren) first; see below |
+| TensorFlow removal | ~0.5d | **done (2026-07-26)** — dead local-dev TF1 branches + orphaned `core/embedding_model/` removed; see Resolved note below |
 | JS build-tooling cleanup | **done (2026-07-09)** | exact pins applied, commit `480607b`; `npm audit fix` scope was a no-op (already clean) |
 | Minimal CI scaffold | ~1-1.5d | **deferred to 2026-07-17**, same conversation — repo currently has zero CI |
 
