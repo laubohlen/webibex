@@ -26,6 +26,17 @@ os.environ.setdefault("AWS_S3_REGION_NAME", "us-west-000")
 os.environ.setdefault("RUNPOD_ENDPOINT_ID", "test-runpod-endpoint-id")
 os.environ.setdefault("RUNPOD_API_KEY", "test-runpod-api-key")
 
+# moto reads this to know which custom (non-AWS) endpoints it should
+# intercept -- must be set before any `moto.mock_s3()` context starts, so
+# module scope (here) is early enough. Matches AWS_S3_ENDPOINT_URL above.
+os.environ.setdefault("MOTO_S3_CUSTOM_ENDPOINTS", "https://example-b2-endpoint.invalid")
+
+# get_b2_resource() passes endpoint_url + signature_version='s3v4' but no
+# region_name -- botocore can raise NoRegionError while resolving the
+# signer without a region in scope. Harmless for the existing non-moto
+# tests either way; defensive default for the moto_s3 tier.
+os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+
 # db_management/test.py is a one-off data-migration script (not a real test) --
 # it imports Django models at module scope and mutates a live DB, it must
 # never be picked up by pytest's collection glob.
@@ -67,18 +78,59 @@ def _blocked_boto3_resource(*_args, **_kwargs):
 
 
 @pytest.fixture(autouse=True)
-def no_network():
+def no_network(request):
     """Autouse guard: block real network egress for the whole suite.
 
     Patches boto3.resource and requests.post globally so accidental real
     calls raise instead of silently reaching AWS/B2/RunPod. Individual tests
     that need a mocked response should reconfigure the returned mocks (see
     `mock_runpod` / `mock_b2`) rather than removing this guard.
+
+    Tests marked `@pytest.mark.moto_s3` (see tests/conftest.py::moto_b2) skip
+    the boto3.resource patch: moto's `mock_s3()` intercepts at the
+    botocore/urllib3 HTTP layer, not by replacing boto3.resource, so leaving
+    this guard active under moto_s3 would incorrectly block every
+    legitimate boto3.resource() call the B2 code makes even while moto is
+    running. The requests.post patch stays unconditional -- moto_s3 only
+    concerns S3, not other outbound HTTP.
+
+    Returns a (post_patch, resource_patch) tuple; `resource_patch` is `None`
+    when the boto3.resource patch was skipped (moto_s3-marked tests). See
+    `mock_runpod` for the existing consumer of this contract.
     """
+    from contextlib import ExitStack
     from unittest import mock
 
-    with (
-        mock.patch.object(requests, "post", side_effect=_blocked_requests_post) as post_patch,
-        mock.patch.object(boto3, "resource", side_effect=_blocked_boto3_resource) as resource_patch,
-    ):
+    with ExitStack() as stack:
+        post_patch = stack.enter_context(
+            mock.patch.object(requests, "post", side_effect=_blocked_requests_post)
+        )
+        resource_patch = None
+        if request.node.get_closest_marker("moto_s3") is None:
+            resource_patch = stack.enter_context(
+                mock.patch.object(boto3, "resource", side_effect=_blocked_boto3_resource)
+            )
         yield post_patch, resource_patch
+
+
+# Hardening for the moto_s3 bypass above: nothing else stops a future test
+# from adding @pytest.mark.moto_s3 just to silence the boto3.resource guard
+# without actually mocking S3, letting a real network call through
+# unguarded. Fail collection instead. The one exception is a guard test that
+# deliberately asserts the *requests.post* patch still applies under the
+# marker -- it doesn't touch S3 by design, so it has no moto_b2 fixture.
+_MOTO_S3_MISUSE_ALLOWLIST = {"test_moto_s3_marker_does_not_bypass_requests_post_guard"}
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if (
+            item.get_closest_marker("moto_s3") is not None
+            and "moto_b2" not in item.fixturenames
+            and item.originalname not in _MOTO_S3_MISUSE_ALLOWLIST
+        ):
+            raise pytest.UsageError(
+                f"{item.nodeid}: @pytest.mark.moto_s3 requires the `moto_b2` fixture "
+                "(this marker only exists to let moto intercept boto3.resource -- "
+                "without moto_b2 active, boto3.resource() would reach the real network)."
+            )

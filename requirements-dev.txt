@@ -6,6 +6,7 @@
 #
 # Local install: pip install -r requirements.txt -r requirements-dev.txt
 #              (or: uv pip install -r requirements.txt -r requirements-dev.txt)
+moto==4.2.14
 pytest==9.1.1
 pytest-cov==7.1.0
 pytest-django==4.12.0

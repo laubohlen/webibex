@@ -48,6 +48,18 @@ compatibility before rollout — status as of 2026-07-07: unresolved (user point
 existing `AWS_S3_*` / `AWS_STORAGE_BUCKET_NAME` env vars, but a dedicated separate test
 bucket was not confirmed to exist).
 
+**2026-07-26 update**: a `moto`-based in-process S3-mock test tier now exists for
+`core/b2_utils.py` (`tests/core/test_b2_utils_moto.py`, pinned `moto==4.2.14`,
+gated behind a `moto_s3` pytest marker) and has been verified with real local
+execution — all 15 tests pass, `core/b2_utils.py` coverage is 100% under this
+file. This confirms `moto==4.2.14` is compatible with the exact pinned
+`boto3==1.26.0`/`botocore==1.29.165` triangle above, but it does **not** unblock
+this landmine itself: moto simulates S3 semantics, not Backblaze B2's actual
+behavior (B2 is only S3-*compatible*), so the real triangle bump still needs the
+dedicated B2 test bucket to verify against. moto 5.x is deliberately deferred to
+be bumped together with that future triangle bump, not independently (moto's
+simulated-S3 fidelity is calibrated to the botocore version it mocks).
+
 ### TensorFlow removal
 
 `core/embedding_model/saved_model.pb` is committed to the repo (not gitignored) and

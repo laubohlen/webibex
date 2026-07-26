@@ -4,6 +4,7 @@ from io import BytesIO
 from types import SimpleNamespace
 from unittest import mock
 
+import boto3
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -197,3 +198,36 @@ def mock_b2():
     """
     with mock.patch("core.b2_utils.download_file") as download_mock:
         yield download_mock
+
+
+@pytest.fixture
+def moto_b2():
+    """In-process S3 mock for core.b2_utils, distinct from `mock_b2` above.
+
+    `mock_b2` stubs out core.b2_utils.download_file at the Python-function
+    boundary. This fixture instead starts moto's `mock_s3()` (moto 4.2.14 --
+    NOT `mock_aws`, which is 5.x-only and unavailable at this pin), which
+    intercepts at the botocore/urllib3 HTTP layer, so the real
+    get_b2_resource/download_file/delete_files/check_file_exists code paths
+    in core.b2_utils.py run against a real (fake) S3 backend.
+
+    Consumers MUST also carry `@pytest.mark.moto_s3` -- see
+    conftest.py::no_network, which skips its boto3.resource-blocking patch
+    only for tests bearing that marker.
+
+    Bucket creation is pinned to `us-east-1` specifically (independent of
+    whatever AWS_DEFAULT_REGION the app's own resource calls use) to avoid
+    needing a CreateBucketConfiguration/LocationConstraint on create_bucket.
+
+    Yields a boto3 S3 *client* (not a resource) -- the most directly useful
+    contract for tests that call put_object/head_bucket/head_object/etc.
+    against the mock directly.
+    """
+    from moto import (
+        mock_s3,  # lazy import -- see test_b2_utils_moto.py module docstring
+    )
+
+    with mock_s3():
+        setup_resource = boto3.resource("s3", region_name="us-east-1")
+        setup_resource.create_bucket(Bucket="test-bucket")
+        yield boto3.client("s3", region_name="us-east-1")
