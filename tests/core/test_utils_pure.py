@@ -14,8 +14,8 @@ Swap back to Hypothesis once the dependency is added and verified in an
 environment with network access.
 """
 
-import numpy as np
 import cv2
+import numpy as np
 import pytest
 
 from core.utils import (

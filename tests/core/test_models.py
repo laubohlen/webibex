@@ -3,7 +3,7 @@
 import pytest
 from django.db import IntegrityError, transaction
 
-from core.models import Location, Region
+from core.models import Location
 from simple_landmarks.models import Landmark
 
 
@@ -58,9 +58,8 @@ def test_region_unique_name_per_owner_duplicate_raises_integrity_error(
     owner = user_factory(username="owner1")
     region_factory(owner=owner, name="X")
 
-    with pytest.raises(IntegrityError):
-        with transaction.atomic():
-            region_factory(owner=owner, name="X")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        region_factory(owner=owner, name="X")
 
 
 @pytest.mark.django_db

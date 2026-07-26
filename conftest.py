@@ -54,13 +54,13 @@ collect_ignore = ["db_management/test.py"]
 # pytest-django's internal hook-ordering timing entirely. Safe to call even
 # when pytest-django also calls it later -- django.setup() is a no-op once
 # apps.ready is True.
-import django  # noqa: E402
+import django
 
 django.setup()
 
-import boto3  # noqa: E402  (import after env setdefault, before fixtures)
-import pytest  # noqa: E402
-import requests  # noqa: E402
+import boto3
+import pytest
+import requests
 
 
 def _blocked_requests_post(*_args, **_kwargs):

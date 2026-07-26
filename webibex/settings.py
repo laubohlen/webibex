@@ -11,10 +11,10 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 import os
-import dj_database_url
 from pathlib import Path
-from environ import Env
 
+import dj_database_url
+from environ import Env
 
 # environment setup
 env = Env()
