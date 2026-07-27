@@ -761,7 +761,6 @@ or excluded via `.coveragerc`'s `omit =` list):
 | `webibex/wsgi.py` | unmeasured | `.coveragerc` omit |
 | `db_management/__init__.py` | unmeasured | `.coveragerc` omit (`db_management/*`) |
 | `db_management/populate_created_at_field.py` | unmeasured | `.coveragerc` omit (`db_management/*`) |
-| `db_management/test.py` | unmeasured | `.coveragerc` omit; also not a real test (one-off data-migration script, see `conftest.py`'s `collect_ignore`) |
 | `scripts/run_local_e2e_server.py` | unmeasured | outside the three `--cov` target packages |
 
 - Trigger: re-enable per-file once that file reaches 100% measured coverage
@@ -772,3 +771,42 @@ or excluded via `.coveragerc`'s `omit =` list):
   scoping conversation (only 7 of these 8 production files were) but is
   deferred here anyway per the general coverage-gating rule (72% < 100%) —
   flagged for awareness, not a deviation.
+- `db_management/test.py` was on this table's first version, deferred as
+  "unmeasured". Found 2026-07-27 (same session) to be a byte-for-byte
+  duplicate of `db_management/populate_created_at_field.py` — deleted rather
+  than kept deferred; its `ruff.toml` entry, `conftest.py`'s `collect_ignore`
+  reference, and `tests/webibex/test_infra.py`'s T03 test were all
+  updated/removed accordingly. See
+  `docs/changes/2026-07-27-ruff-baseline-config.md` for the original entry;
+  this is a same-day correction, not a separate CR.
+
+## TODO — no automated database backup, Railway free tier (found 2026-07-27)
+
+Production database (`DATABASES["default"]` via `dj_database_url.parse(env("DATABASE_URL"))`
+when `ENVIRONMENT == "production"`, `webibex/settings.py:151`) has **no backup
+mechanism of any kind**. Confirmed via repo-wide grep (`backup`, case-insensitive,
+across `.md`/`.py`/`.toml`/`.yml`/`Procfile`) — zero hits describing an actual DB
+backup process. User confirmed directly: Railway's automated Postgres backups are a
+paid-plan feature, and this account is not on the Pro plan, so nothing is currently
+capturing point-in-time recovery data for this app's only database.
+
+**Risk**: any bad migration, accidental bulk delete, or Railway-side incident is
+unrecoverable data loss for the entire ibex photo-ID dataset (images, locations,
+landmarks, region/owner assignments) — there is no local `db.sqlite3` fallback in
+production (that file only exists for local dev; production always uses
+`DATABASE_URL`/Postgres per the `ENVIRONMENT == "production"` branch above).
+
+**Options, not yet evaluated in depth**:
+- Upgrade the Railway plan to unlock its built-in automated Postgres backups
+  (simplest, but recurring cost — needs the professor's budget sign-off).
+- Scheduled `pg_dump` pushed to the B2 bucket this app already uses for image
+  storage (`core/b2_utils.py` — credentials and bucket access already wired up,
+  no new external dependency). Needs a scheduler (Railway cron job / GitHub Actions
+  on a schedule, since this repo has no CI infra yet — see the CI-scaffold TODO
+  above) and a retention/rotation policy.
+- Railway CLI-driven export triggered by an external scheduler (same scheduling
+  gap as above).
+
+- Trigger: professor confirms acceptable risk tolerance / budget for a paid tier,
+  or this becomes the next priority item given the CI-scaffold gap already blocks
+  the B2-cron option from being automated cleanly.

@@ -39,11 +39,6 @@ os.environ.setdefault("MOTO_S3_CUSTOM_ENDPOINTS", "https://example-b2-endpoint.i
 # tests either way; defensive default for the moto_s3 tier.
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
-# db_management/test.py is a one-off data-migration script (not a real test) --
-# it imports Django models at module scope and mutates a live DB, it must
-# never be picked up by pytest's collection glob.
-collect_ignore = ["db_management/test.py"]
-
 # EXPLICIT django.setup(): once `tests` (or any nested test dir) is part
 # of the collection args, pytest treats `tests/conftest.py` as an
 # "initial" conftest too and loads it in the same early phase as this root
@@ -56,7 +51,7 @@ collect_ignore = ["db_management/test.py"]
 # pytest-django's internal hook-ordering timing entirely. Safe to call even
 # when pytest-django also calls it later -- django.setup() is a no-op once
 # apps.ready is True.
-import django  # noqa: E402 -- must follow the env-var setdefault() calls above
+import django
 
 django.setup()
 

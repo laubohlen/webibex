@@ -49,15 +49,12 @@ def test_endpoint_inference_import_time_default_args_resolve_without_crash():
 
 
 # T03 --------------------------------------------------------------------
-def test_db_management_test_script_is_excluded_from_collection():
-    assert Path("db_management/test.py").exists()
-    # The file's name does not match pytest's default python_files glob
-    # ("test_*.py" / "*_test.py") *and* it is additionally defensively
-    # listed in the root conftest.py collect_ignore, so it is never
-    # imported by pytest either way.
-    import conftest as root_conftest
-
-    assert "db_management/test.py" in root_conftest.collect_ignore
+def test_db_management_test_script_deleted():
+    assert not Path("db_management/test.py").exists(), (
+        "db_management/test.py was a byte-for-byte duplicate of "
+        "db_management/populate_created_at_field.py (same script, "
+        "misleading name) -- removed 2026-07-27, keep it deleted"
+    )
 
 
 def test_core_test_model_deleted():
