@@ -794,6 +794,40 @@ django-stubs-gap errors, unchanged) and full test suite green (184 passed,
 1 skipped, 1 xfailed, coverage unchanged). See
 `docs/changes/2026-07-27-ruff-coverage-gate-expansion.md`.
 
+## TODO — SonarQube first-ever scan findings, webibex (found 2026-07-27)
+
+`webibex`'s first-ever SonarQube analysis ran this session (host-side,
+triggered outside the devcontainer; fetched in-container via
+`/sonar fetch /workspace/webibex`, revision `12b93fa`). Project-wide baseline
+(pre-existing debt, not introduced by any change in this session):
+
+- **475 issues**: 5 BLOCKER, 161 CRITICAL, 215 MAJOR, 94 MINOR, 3 INFO.
+- **0 hotspots**.
+- Pyright project-wide (per-module, `--outputjson`): 207 errors total
+  (`core/` 131, `tests/` 70, `webibex/` 4, `simple_landmarks/` 2,
+  `db_management/` 0) — all INFO-severity, predominantly `django-stubs` gaps
+  (`.objects` manager, `CharField`/`str` return mismatches, `env()` `NoValue`
+  defaults), consistent with the known gap tracked since
+  `docs/changes/2026-07-27-boto3-stubs-typing.md`.
+
+**Concretely verified this session** (scoped to the
+`ruff-coverage-gate-expansion` CR's two touched files): 6x `python:S6553`
+("Remove this `null=True` flag") on `core/models.py` lines 17, 18, 21, 22,
+29, 65 — all on `Animal`/`Region`/`Location` `CharField`/`FloatField`
+declarations **outside** that CR's diff hunks, pre-existing, left untouched
+(a `null=True` removal on a live Django field is a migration-adjacent
+change, not a lint fix — out of scope for a lint CR).
+
+- Trigger: dedicated SonarQube triage session — start with the 5 BLOCKER +
+  161 CRITICAL issues (highest severity first), then decide whether MAJOR/MINOR
+  get systematically worked through or left as tracked debt. The 6 verified
+  `S6553` findings above are a concrete starting point for the `django`-tagged
+  rule category. django-stubs installation (tracked separately, see
+  `docs/changes/2026-07-27-boto3-stubs-typing.md`) would also collapse a large
+  fraction of the 207 pyright errors in one pass.
+- Not actioned this session — scope was the ruff coverage-gate expansion CR,
+  not a general SonarQube cleanup.
+
 ## TODO — no automated database backup, Railway free tier (found 2026-07-27)
 
 Production database (`DATABASES["default"]` via `dj_database_url.parse(env("DATABASE_URL"))`
