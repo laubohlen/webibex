@@ -785,9 +785,9 @@ and `core/templatetags/custom_template_tags.py` (93%) re-enabled as a
 one-off, explicit user-approved exception — the documented gate policy
 stays 100% coverage, this was a case-by-case call, not a threshold change.
 Both files were already ruff-clean under the full curated ruleset once
-enabled: fixed 4 `RUF012` (mutable Django `Meta`/choices class attributes,
+enabled: fixed 3 `RUF012` (mutable Django `Meta`/choices class attributes,
 now `ClassVar`-annotated), 1 `E501`, 1 `ANN204`, and on
-`custom_template_tags.py` 6 `ANN001`/`ANN201`/`ANN002`/`ANN003` (added type
+`custom_template_tags.py` 8 `ANN001`/`ANN201`/`ANN002`/`ANN003` (added type
 annotations to `dict_get`/`post_task_redirect`, narrowed from `Any` to avoid
 `ANN401`). Verified net-zero new `pyright` errors (6 pre-existing
 django-stubs-gap errors, unchanged) and full test suite green (184 passed,
@@ -801,7 +801,7 @@ triggered outside the devcontainer; fetched in-container via
 `/sonar fetch /workspace/webibex`, revision `12b93fa`). Project-wide baseline
 (pre-existing debt, not introduced by any change in this session):
 
-- **475 issues**: 5 BLOCKER, 161 CRITICAL, 215 MAJOR, 94 MINOR, 3 INFO.
+- **478 issues**: 5 BLOCKER, 161 CRITICAL, 215 MAJOR, 94 MINOR, 3 INFO.
 - **0 hotspots**.
 - Pyright project-wide (per-module, `--outputjson`): 207 errors total
   (`core/` 131, `tests/` 70, `webibex/` 4, `simple_landmarks/` 2,

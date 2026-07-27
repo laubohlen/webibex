@@ -4,7 +4,7 @@
 - Modified: `ruff.toml` — removed `per-file-ignores` entries for `core/models.py`
   (98% coverage) and `core/templatetags/custom_template_tags.py` (93% coverage).
   Both now enforced under the curated ruleset
-  (`E,F,UP,B,S,SIM,PIE,C4,T20,ANN,RUF`). Left the remaining 11 deferred files
+  (`E,F,UP,B,S,SIM,PIE,C4,T20,ANN,RUF`). Left the remaining 12 deferred files
   untouched.
 - Modified: `core/models.py` — `Region.Meta.constraints`, `Location.SOURCE_CHOICES`,
   `IbexImage.SIDE_CHOICES` annotated `ClassVar` (RUF012, mutable Django
@@ -22,9 +22,9 @@
   the 2026-07-27 "ruff-baseline deferred files" TODO; deferred-files table
   itself left as-is (append-only doc convention).
 
-**Follow-up action:** none required for these two files. 11 files remain
+**Follow-up action:** none required for these two files. 12 files remain
 deferred (`core/admin.py`, `core/signals.py`, `core/utils.py`, `core/views.py`,
-`simple_landmarks/views.py`, `webibex/urls.py`, and 5 unmeasured files) — see
+`simple_landmarks/views.py`, `webibex/urls.py`, and 6 unmeasured files) — see
 `docs/security-remediation-plan.md`'s TODO for the current table.
 
 **Do NOT:**
