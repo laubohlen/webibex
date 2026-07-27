@@ -6,6 +6,8 @@
 #
 # Local install: pip install -r requirements.txt -r requirements-dev.txt
 #              (or: uv pip install -r requirements.txt -r requirements-dev.txt)
+boto3-stubs[s3]==1.26.0
+botocore-stubs==1.29.165
 moto==4.2.14
 pytest==9.1.1
 pytest-cov==7.1.0

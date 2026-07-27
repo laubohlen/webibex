@@ -115,7 +115,7 @@ def test_delete_files_removes_existing_objects_happy(moto_b2):
     for key in ("k1", "k2"):
         with pytest.raises(ClientError) as exc_info:
             moto_b2.head_object(Bucket="test-bucket", Key=key)
-        assert exc_info.value.response["Error"]["Code"] == "404"
+        assert exc_info.value.response.get("Error", {}).get("Code") == "404"
 
 
 # ---------------------------------------------------------------------------

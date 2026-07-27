@@ -2,10 +2,11 @@ import logging
 from typing import cast
 
 import boto3  # https://pypi.org/project/boto3/
-from boto3.resources.base import ServiceResource
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from environ import Env
+from mypy_boto3_s3 import S3ServiceResource
+from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def get_b2_resource(
     endpoint: str = AWS_S3_ENDPOINT_URL,
     key_id: str = AWS_ACCESS_KEY_ID,
     application_key: str = AWS_SECRET_ACCESS_KEY,
-) -> ServiceResource:
+) -> S3ServiceResource:
     b2 = boto3.resource(
         service_name="s3",
         endpoint_url=endpoint,  # Backblaze endpoint
@@ -66,7 +67,9 @@ def delete_files(
     bucket_file_path_list: list[str], bucket_name: str = AWS_STORAGE_BUCKET_NAME
 ) -> None:
     b2_resource = get_b2_resource()
-    objects = [{"Key": key} for key in bucket_file_path_list]
+    objects: list[ObjectIdentifierTypeDef] = [
+        {"Key": key} for key in bucket_file_path_list
+    ]
     try:
         b2_resource.Bucket(bucket_name).delete_objects(Delete={"Objects": objects})
     except ClientError as ce:
@@ -82,7 +85,7 @@ def check_file_exists(
         b2_resource.meta.client.head_object(Bucket=bucket_name, Key=bucket_file_path)
         return True
     except ClientError as e:
-        error_code = e.response["Error"]["Code"]
+        error_code = e.response.get("Error", {}).get("Code")
         if error_code == "404":
             # KNOWN BUG (out of scope for this CR, see the B2 S3-mock test
             # tier's T08 case): falls through to `return None` here instead
