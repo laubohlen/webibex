@@ -1,0 +1,30 @@
+extend-exclude = [
+    "training/triplet-reid",
+    "*/migrations/*",
+]
+
+[lint]
+select = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "ANN", "T201"]
+
+# --- Deferred: below 100% measured coverage or unmeasured -----------------
+# Tracked in docs/security-remediation-plan.md ("ruff baseline findings").
+# Re-enable per-file once that file reaches 100% measured coverage (or gains
+# coverage measurement) -- remove its entry below, one line at a time.
+"core/admin.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"core/models.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"core/signals.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"core/templatetags/custom_template_tags.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"core/utils.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"core/views.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"simple_landmarks/views.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"webibex/urls.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"manage.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"webibex/asgi.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"webibex/wsgi.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"db_management/__init__.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"db_management/populate_created_at_field.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"db_management/test.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
+"scripts/run_local_e2e_server.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]

@@ -78,7 +78,9 @@ def test_get_b2_resource_bound_to_fake_endpoint_happy(moto_b2):
         ("hello.txt", b"hello-b2"),
         (
             "chip.png",
-            b"\x89PNG\r\n\x1a\n" + bytes(range(256)) + b"\x00\x00\x00\x00IEND\xaeB`\x82",
+            b"\x89PNG\r\n\x1a\n"
+            + bytes(range(256))
+            + b"\x00\x00\x00\x00IEND\xaeB`\x82",
         ),
     ],
 )
@@ -163,9 +165,11 @@ def test_check_file_exists_error_paths_return_none_bug_pin(moto_b2, monkeypatch,
         # get_b2_resource() -- it does not reuse the `moto_b2` fixture's
         # client object -- so we monkeypatch get_b2_resource() itself to
         # return a fake resource whose meta.client.head_object() raises a
-        # non-404 ClientError, forcing the `else` branch in check_file_exists.
+        # non-404 ClientError, forcing the `else` branch in check_file_exists
         def _raise_forbidden(*_args, **_kwargs):
-            raise ClientError({"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject")
+            raise ClientError(
+                {"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject"
+            )
 
         class _FakeMetaClient:
             head_object = staticmethod(_raise_forbidden)
@@ -227,8 +231,10 @@ def test_moto_s3_marker_does_not_bypass_requests_post_guard():
     """
     import requests
 
-    with pytest.raises(AssertionError, match="requests.post"):
-        requests.post("http://example.invalid")
+    with pytest.raises(AssertionError, match=r"requests\.post"):
+        # Never reaches the network -- intercepted by the autouse `no_network`
+        # guard (conftest.py), which raises before any real request is sent.
+        requests.post("http://example.invalid")  # noqa: S113
 
 
 # ---------------------------------------------------------------------------

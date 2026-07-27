@@ -117,10 +117,16 @@ def test_no_5xx_across_path_role_combinations(client, user_factory, path, role):
     """R2/R3 consolidated invariant: the static-asset refresh must not turn
     any of these routes into a server error, regardless of caller role."""
     if role == "superuser":
-        user = user_factory(username=f"su_{path}".replace("/", "_"), is_staff=True, is_superuser=True)
+        user = user_factory(
+            username=f"su_{path}".replace("/", "_"), is_staff=True, is_superuser=True
+        )
         client.force_login(user)
     elif role == "staff":
-        user = user_factory(username=f"staff_{path}".replace("/", "_"), is_staff=True, is_superuser=False)
+        user = user_factory(
+            username=f"staff_{path}".replace("/", "_"),
+            is_staff=True,
+            is_superuser=False,
+        )
         client.force_login(user)
     elif role == "plain_user":
         user = user_factory(username=f"plain_{path}".replace("/", "_"))

@@ -41,7 +41,9 @@ def test_animals_overview_authenticated_returns_200_with_expected_context(
 
 # T38 --------------------------------------------------------------------
 @pytest.mark.django_db
-def test_image_read_existing_image_returns_200(client, user_factory, ibex_image_factory):
+def test_image_read_existing_image_returns_200(
+    client, user_factory, ibex_image_factory
+):
     user = user_factory(username="erin")
     image = ibex_image_factory(owner=user)
     client.force_login(user)

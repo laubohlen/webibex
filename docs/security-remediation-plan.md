@@ -718,3 +718,57 @@ now would mean modifying files outside this session's actual scope.
   matching `python.md`'s recommended baseline config (which would enable
   E402 and make the noqa comments meaningful again) and run `ruff --fix`
   project-wide as its own CR.
+
+**RESOLVED (2026-07-27):** superseded by the two CRs below. Commit `a20220b`
+fixed all 8 findings listed above (mechanical, on the 4 named files) as a
+standalone cleanup, ruff still running under bare defaults. Commit (this
+session, see `docs/changes/2026-07-27-ruff-baseline-config.md`) then added
+the actual `ruff.toml` this TODO called for, with the `python.md`-recommended
+curated ruleset (`E,F,UP,B,S,SIM,PIE,C4,T20,ANN,RUF`) — but enforced only on
+files at 100% measured test coverage (plus `tests/**` + root `conftest.py`,
+self-verifying). Below-100%/unmeasured production files are deferred via
+`per-file-ignores`, tracked in the new TODO immediately below. E402 is back
+to being meaningful (the `# noqa: E402` comments in `conftest.py` are live
+again under the curated ruleset).
+
+## TODO — ruff-baseline deferred files, re-enable as coverage improves (added 2026-07-27)
+
+`ruff.toml` (added this session, see
+`docs/changes/2026-07-27-ruff-baseline-config.md`) enforces the curated
+ruleset only on files at 100% measured line coverage (`--cov=core
+--cov=simple_landmarks --cov=webibex`, per `pytest.ini`) plus `tests/**` +
+root `conftest.py` (self-verifying). All other `.py` files are deferred via
+individual `per-file-ignores` entries in `ruff.toml` — full ruleset
+suppressed, not just a subset — so re-enabling one is a one-line removal,
+not a glob edit.
+
+Deferred files (coverage % as of 2026-07-27's full `pytest --cov-report=
+term-missing` run; "unmeasured" = outside the three `--cov` target packages,
+or excluded via `.coveragerc`'s `omit =` list):
+
+| File | Coverage | Reason deferred |
+|---|---|---|
+| `core/admin.py` | 72% | below 100% |
+| `core/models.py` | 98% | below 100% |
+| `core/signals.py` | 46% | below 100% |
+| `core/templatetags/custom_template_tags.py` | 93% | below 100% |
+| `core/utils.py` | 71% | below 100% |
+| `core/views.py` | 23% | below 100% |
+| `simple_landmarks/views.py` | 0% | below 100% |
+| `webibex/urls.py` | 50% | below 100% |
+| `manage.py` | unmeasured | `.coveragerc` omit |
+| `webibex/asgi.py` | unmeasured | `.coveragerc` omit |
+| `webibex/wsgi.py` | unmeasured | `.coveragerc` omit |
+| `db_management/__init__.py` | unmeasured | `.coveragerc` omit (`db_management/*`) |
+| `db_management/populate_created_at_field.py` | unmeasured | `.coveragerc` omit (`db_management/*`) |
+| `db_management/test.py` | unmeasured | `.coveragerc` omit; also not a real test (one-off data-migration script, see `conftest.py`'s `collect_ignore`) |
+| `scripts/run_local_e2e_server.py` | unmeasured | outside the three `--cov` target packages |
+
+- Trigger: re-enable per-file once that file reaches 100% measured coverage
+  (or gains coverage measurement for the first time) — remove its
+  `per-file-ignores` entry in `ruff.toml`, run `ruff check <file>` to see
+  what actually fires, triage as its own small CR.
+- `core/admin.py` was not called out explicitly in this session's original
+  scoping conversation (only 7 of these 8 production files were) but is
+  deferred here anyway per the general coverage-gating rule (72% < 100%) —
+  flagged for awareness, not a deviation.

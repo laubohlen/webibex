@@ -39,16 +39,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-if ENVIRONMENT == "development":
-    DEBUG = True
-else:
-    DEBUG = False
+DEBUG = ENVIRONMENT == "development"
 
 ALLOWED_HOSTS = ["wibex.up.railway.app", "127.0.0.1", "localhost:8000"]
 
 CSRF_TRUSTED_ORIGINS = ["https://wibex.up.railway.app"]
 
-if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
+if ENVIRONMENT == "production" or POSTGRES_LOCALLY:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = True
@@ -100,7 +97,7 @@ MIDDLEWARE = [
 ]
 
 # disable browser caching
-if DEBUG == True:
+if DEBUG:
     INSTALLED_APPS += ["debug_toolbar"]
     MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
     MIDDLEWARE += ["django.middleware.cache.FetchFromCacheMiddleware"]
@@ -147,7 +144,7 @@ DATABASES = {
     }
 }
 
-if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
+if ENVIRONMENT == "production" or POSTGRES_LOCALLY:
     DATABASES["default"] = dj_database_url.parse(env("DATABASE_URL"))
 
 
@@ -156,7 +153,10 @@ if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "UserAttributeSimilarityValidator"
+        ),
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
@@ -201,7 +201,7 @@ LOGIN_REDIRECT_URL = "/"
 # Media files (Uploaded by users)
 MEDIA_URL = "/media/"
 
-if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
+if ENVIRONMENT == "production" or POSTGRES_LOCALLY:
     STORAGES = {
         "default": {
             "BACKEND": "storages.backends.s3.S3Storage",
@@ -242,7 +242,7 @@ CHIP_HEIGHT = 288
 
 SITE_ID = 1
 
-if ENVIRONMENT == "production" or POSTGRES_LOCALLY == True:
+if ENVIRONMENT == "production" or POSTGRES_LOCALLY:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_HOST = "mail.infomaniak.com"
     EMAIL_HOST_USER = env("EMAIL_ADRESS")

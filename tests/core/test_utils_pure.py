@@ -271,7 +271,9 @@ def test_overlapping_regions_returns_overlapping_region(region_stub_cls):
     assert result == [other]
 
 
-def test_overlapping_regions_boundary_exactly_touching_is_not_overlapping(region_stub_cls, monkeypatch):
+def test_overlapping_regions_boundary_exactly_touching_is_not_overlapping(
+    region_stub_cls, monkeypatch
+):
     import core.utils as utils_module
 
     single = region_stub_cls(origin_latitude=46.0, origin_longitude=8.0, radius=1000)
@@ -290,7 +292,8 @@ def test_overlapping_regions_boundary_exactly_touching_is_not_overlapping(region
 # T20 ------------------------------------------------------------------
 def test_overlapping_regions_no_overlap_returns_empty_list(region_stub_cls):
     single = region_stub_cls(origin_latitude=46.0, origin_longitude=8.0, radius=2000)
-    far = region_stub_cls(origin_latitude=47.0, origin_longitude=9.0, radius=2000)  # ~100km away
+    # ~100km away
+    far = region_stub_cls(origin_latitude=47.0, origin_longitude=9.0, radius=2000)
 
     result = overlapping_regions(single, [far])
 
@@ -338,7 +341,8 @@ def test_id_color_mapping_distinct_ids_get_distinct_colors_in_order(chip_stub_cl
 
 
 def test_id_color_mapping_cycles_modulo_five_beyond_five_ids(chip_stub_cls):
-    gallery = [(chip_stub_cls(animal_id=i), float(i)) for i in range(1, 8)]  # 7 distinct ids
+    # 7 distinct ids
+    gallery = [(chip_stub_cls(animal_id=i), float(i)) for i in range(1, 8)]
     result = id_color_mapping(gallery)
     assert len(result) == 7
     assert result[1] == result[6]  # 6th new id (index 5) cycles back to color index 0

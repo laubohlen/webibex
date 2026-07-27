@@ -115,7 +115,9 @@ def test_embed_new_chip_cloud_storage_and_cloud_endpoint_branch(
 
     with (
         override_settings(POSTGRES_LOCALLY=True, AWS_LOCATION="media"),
-        mock.patch("core.utils.endpoint_inference", return_value=[0.1, 0.2]) as inference_mock,
+        mock.patch(
+            "core.utils.endpoint_inference", return_value=[0.1, 0.2]
+        ) as inference_mock,
         mock.patch("core.utils.Embedding.objects.create") as create_mock,
     ):
         embed_new_chip(chip)
@@ -134,7 +136,9 @@ def test_embed_new_chip_local_storage_and_cloud_endpoint_branch(
 
     with (
         override_settings(MEDIA_ROOT=str(tmp_path)),
-        mock.patch("core.utils.endpoint_inference", return_value=[0.2, 0.3]) as inference_mock,
+        mock.patch(
+            "core.utils.endpoint_inference", return_value=[0.2, 0.3]
+        ) as inference_mock,
         mock.patch("core.utils.Embedding.objects.create") as create_mock,
     ):
         embed_new_chip(chip)
@@ -152,7 +156,7 @@ def test_embed_new_chip_local_storage_and_cloud_endpoint_branch(
         {"ENVIRONMENT": "production"},
     ],
 )
-def test_embed_new_chip_cloud_branch_taken_regardless_of_how_database_is_local_becomes_false(
+def test_embed_new_chip_cloud_branch_taken_regardless_of_how_database_is_local_becomes_false(  # noqa: E501
     mock_b2, tiny_png_bytes, ibex_chip_stub_factory, settings_overrides
 ):
     """Post-deletion regression guard: the cloud branch is taken whenever
@@ -241,7 +245,7 @@ def test_settings_no_longer_exposes_endpoint_locally():
     assert not hasattr(settings, "ENDPOINT_LOCALLY")
 
 
-def test_embed_new_chip_cloud_branch_passes_correct_base64_payload_to_endpoint_inference(
+def test_embed_new_chip_cloud_branch_passes_correct_base64_payload_to_endpoint_inference(  # noqa: E501
     mock_b2, tiny_png_bytes, ibex_chip_stub_factory
 ):
     mock_b2.return_value = tiny_png_bytes
@@ -249,7 +253,9 @@ def test_embed_new_chip_cloud_branch_passes_correct_base64_payload_to_endpoint_i
 
     with (
         override_settings(POSTGRES_LOCALLY=True, AWS_LOCATION="media"),
-        mock.patch("core.utils.endpoint_inference", return_value=[0.1, 0.2]) as inference_mock,
+        mock.patch(
+            "core.utils.endpoint_inference", return_value=[0.1, 0.2]
+        ) as inference_mock,
         mock.patch("core.utils.Embedding.objects.create"),
     ):
         embed_new_chip(chip)

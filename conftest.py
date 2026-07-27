@@ -14,6 +14,8 @@ hook-ordering -- see the django.setup() call below for why that matters).
 """
 
 import os
+from collections.abc import Generator
+from typing import Any
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "webibex.settings")
 os.environ.setdefault("ENVIRONMENT", "test")
@@ -54,23 +56,23 @@ collect_ignore = ["db_management/test.py"]
 # pytest-django's internal hook-ordering timing entirely. Safe to call even
 # when pytest-django also calls it later -- django.setup() is a no-op once
 # apps.ready is True.
-import django
+import django  # noqa: E402 -- must follow the env-var setdefault() calls above
 
 django.setup()
 
-import boto3
-import pytest
-import requests
+import boto3  # noqa: E402 -- must follow django.setup() above
+import pytest  # noqa: E402 -- must follow django.setup() above
+import requests  # noqa: E402 -- must follow django.setup() above
 
 
-def _blocked_requests_post(*_args, **_kwargs):
+def _blocked_requests_post(*_args: object, **_kwargs: object) -> None:
     raise AssertionError(
         "Real network call via requests.post() attempted during tests -- "
         "no_network guard tripped. Use the `mock_runpod` fixture instead."
     )
 
 
-def _blocked_boto3_resource(*_args, **_kwargs):
+def _blocked_boto3_resource(*_args: object, **_kwargs: object) -> None:
     raise AssertionError(
         "Real network call via boto3.resource() attempted during tests -- "
         "no_network guard tripped. Use the `mock_b2` fixture instead."
@@ -78,7 +80,7 @@ def _blocked_boto3_resource(*_args, **_kwargs):
 
 
 @pytest.fixture(autouse=True)
-def no_network(request):
+def no_network(request: pytest.FixtureRequest) -> Generator[tuple[Any, Any | None]]:
     """Autouse guard: block real network egress for the whole suite.
 
     Patches boto3.resource and requests.post globally so accidental real
@@ -108,7 +110,9 @@ def no_network(request):
         resource_patch = None
         if request.node.get_closest_marker("moto_s3") is None:
             resource_patch = stack.enter_context(
-                mock.patch.object(boto3, "resource", side_effect=_blocked_boto3_resource)
+                mock.patch.object(
+                    boto3, "resource", side_effect=_blocked_boto3_resource
+                )
             )
         yield post_patch, resource_patch
 
@@ -122,7 +126,7 @@ def no_network(request):
 _MOTO_S3_MISUSE_ALLOWLIST = {"test_moto_s3_marker_does_not_bypass_requests_post_guard"}
 
 
-def pytest_collection_modifyitems(items):
+def pytest_collection_modifyitems(items: list[pytest.Function]) -> None:
     for item in items:
         if (
             item.get_closest_marker("moto_s3") is not None
@@ -132,5 +136,6 @@ def pytest_collection_modifyitems(items):
             raise pytest.UsageError(
                 f"{item.nodeid}: @pytest.mark.moto_s3 requires the `moto_b2` fixture "
                 "(this marker only exists to let moto intercept boto3.resource -- "
-                "without moto_b2 active, boto3.resource() would reach the real network)."
+                "without moto_b2 active, boto3.resource() would reach the real "
+                "network)."
             )

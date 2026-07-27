@@ -69,7 +69,11 @@ def ibex_chip_stub_factory():
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def user_factory(db):
-    def _make(username="testuser", password="test-pass-12345", **overrides):
+    def _make(
+        username="testuser",
+        password="test-pass-12345",  # noqa: S107 -- test-only default, not a real credential
+        **overrides,
+    ):
         user_model = get_user_model()
         defaults = {"username": username, "email": f"{username}@example.invalid"}
         defaults.update(overrides)
@@ -152,7 +156,9 @@ def tiny_jpeg(tiny_jpeg_bytes):
 @pytest.fixture
 def corrupted_image():
     """Empty/truncated bytes -- cv2.imread cannot decode this (T40)."""
-    return SimpleUploadedFile("corrupted.png", b"not a real image", content_type="image/png")
+    return SimpleUploadedFile(
+        "corrupted.png", b"not a real image", content_type="image/png"
+    )
 
 
 @pytest.fixture
@@ -160,8 +166,12 @@ def ibex_image_factory(db, user_factory, tiny_png_bytes):
     def _make(owner=None, side=None, name="upload", **overrides):
         if owner is None:
             owner = user_factory()
-        folder = Folder.objects.filter(name=f"{owner.username}_files", owner=owner).first()
-        upload = SimpleUploadedFile(f"{name}.png", tiny_png_bytes, content_type="image/png")
+        folder = Folder.objects.filter(
+            name=f"{owner.username}_files", owner=owner
+        ).first()
+        upload = SimpleUploadedFile(
+            f"{name}.png", tiny_png_bytes, content_type="image/png"
+        )
         defaults = {
             "original_filename": upload.name,
             "file": upload,

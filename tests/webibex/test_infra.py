@@ -38,7 +38,9 @@ def test_settings_import_under_environment_test_is_safe():
 def test_endpoint_inference_import_time_default_args_resolve_without_crash():
     utils = importlib.import_module("core.utils")
 
-    endpoint_id_default, endpoint_api_key_default = utils.endpoint_inference.__defaults__
+    endpoint_id_default, endpoint_api_key_default = (
+        utils.endpoint_inference.__defaults__
+    )
 
     assert isinstance(endpoint_id_default, str)
     assert endpoint_id_default != ""
@@ -81,7 +83,9 @@ def test_no_network_guard_blocks_real_egress_attempts(no_network):
     import requests
 
     with pytest.raises(AssertionError, match="no_network guard tripped"):
-        requests.post("https://example.invalid/")
+        # Never reaches the network -- intercepted by the no_network guard,
+        # which raises before any real request is sent.
+        requests.post("https://example.invalid/")  # noqa: S113
 
     with pytest.raises(AssertionError, match="no_network guard tripped"):
         boto3.resource("s3")

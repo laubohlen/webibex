@@ -95,7 +95,9 @@ def test_real_login_then_logout_flow_under_simulated_production_settings(user_fa
     assert "login" in protected_after_logout["Location"]
 
 
-def test_real_login_then_password_change_flow_under_ambient_test_environment(user_factory):
+def test_real_login_then_password_change_flow_under_ambient_test_environment(
+    user_factory,
+):
     """Authenticated POST via allauth's ChangePasswordForm -- exercises
     CSRF_COOKIE_SECURE under a live session, unlike the unauthenticated
     login POST or the (usually form-less) logout POST above.
