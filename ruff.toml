@@ -13,10 +13,12 @@ select = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
 # Tracked in docs/security-remediation-plan.md ("ruff baseline findings").
 # Re-enable per-file once that file reaches 100% measured coverage (or gains
 # coverage measurement) -- remove its entry below, one line at a time.
+# One-off exception (2026-07-27): core/models.py (98%) and
+# core/templatetags/custom_template_tags.py (93%) re-enabled below 100%
+# because they were already ruff-clean under the full ruleset; documented
+# gate policy stays 100%, this is a case-by-case call, not a threshold change.
 "core/admin.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
-"core/models.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
 "core/signals.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
-"core/templatetags/custom_template_tags.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
 "core/utils.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
 "core/views.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]
 "simple_landmarks/views.py" = ["E", "F", "UP", "B", "S", "SIM", "PIE", "C4", "T20", "ANN", "RUF"]

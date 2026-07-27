@@ -780,6 +780,20 @@ or excluded via `.coveragerc`'s `omit =` list):
   `docs/changes/2026-07-27-ruff-baseline-config.md` for the original entry;
   this is a same-day correction, not a separate CR.
 
+**UPDATE (2026-07-27, same day, follow-up session):** `core/models.py` (98%)
+and `core/templatetags/custom_template_tags.py` (93%) re-enabled as a
+one-off, explicit user-approved exception — the documented gate policy
+stays 100% coverage, this was a case-by-case call, not a threshold change.
+Both files were already ruff-clean under the full curated ruleset once
+enabled: fixed 4 `RUF012` (mutable Django `Meta`/choices class attributes,
+now `ClassVar`-annotated), 1 `E501`, 1 `ANN204`, and on
+`custom_template_tags.py` 6 `ANN001`/`ANN201`/`ANN002`/`ANN003` (added type
+annotations to `dict_get`/`post_task_redirect`, narrowed from `Any` to avoid
+`ANN401`). Verified net-zero new `pyright` errors (6 pre-existing
+django-stubs-gap errors, unchanged) and full test suite green (184 passed,
+1 skipped, 1 xfailed, coverage unchanged). See
+`docs/changes/2026-07-27-ruff-coverage-gate-expansion.md`.
+
 ## TODO — no automated database backup, Railway free tier (found 2026-07-27)
 
 Production database (`DATABASES["default"]` via `dj_database_url.parse(env("DATABASE_URL"))`

@@ -6,6 +6,7 @@ from django.utils.translation import gettext_lazy as _
 from filer.models.abstract import BaseImage as FilerBaseImage
 
 from collections import OrderedDict
+from typing import ClassVar
 
 
 class User(AbstractUser):
@@ -42,7 +43,7 @@ class Region(models.Model):
 
     # force unique region names per user
     class Meta:
-        constraints = [
+        constraints: ClassVar[list[models.UniqueConstraint]] = [
             models.UniqueConstraint(
                 fields=["owner", "name"], name="unique_region_name_per_owner"
             )
@@ -53,7 +54,7 @@ class Region(models.Model):
 
 
 class Location(models.Model):
-    SOURCE_CHOICES = OrderedDict(
+    SOURCE_CHOICES: ClassVar[OrderedDict[str, str]] = OrderedDict(
         [
             ("gps", "location from camera GPS"),
             ("marker", "location marker set manually"),
@@ -69,7 +70,7 @@ class Location(models.Model):
     exif_longitude = models.FloatField(null=True, blank=True)
     region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         # Use hasattr to check if there's an associated IbexImage.
         if hasattr(self, "ibeximage") and self.ibeximage:
             return f"Location for: {self.ibeximage.name}"
@@ -77,7 +78,7 @@ class Location(models.Model):
 
 
 class IbexImage(FilerBaseImage):
-    SIDE_CHOICES = OrderedDict(
+    SIDE_CHOICES: ClassVar[OrderedDict[str, str]] = OrderedDict(
         [
             ("L", "left"),
             ("R", "right"),
@@ -89,9 +90,11 @@ class IbexImage(FilerBaseImage):
     location = models.OneToOneField(
         Location, on_delete=models.SET_NULL, null=True, blank=True
     )
+    # auto_now_add initialises created_at, then a signal overwrites it with
+    # the file creation datetime.
     created_at = models.DateTimeField(
         _("created at"),
-        auto_now_add=True, # initialise with value, then change to file creation datetime in signal
+        auto_now_add=True,
         null=True,
     )
 
