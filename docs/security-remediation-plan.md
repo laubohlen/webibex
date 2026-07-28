@@ -882,3 +882,150 @@ cleanup CR instead of folding it into the coverage-improvement CR.
   from `ruff.toml`'s per-file-ignores deferred block (line ~24), confirm `pytest`
   coverage config (`pytest.ini`'s `--cov=simple_landmarks`) still resolves cleanly with
   the file gone.
+
+## TODO — `UnboundLocalError` risk in `create_folder_for_animal_on_change` (found 2026-07-28)
+
+Surfaced by code-planner while scoping the `core/signals.py` coverage CR (2nd file in
+the pre-refactor test-coverage push, after `core/admin.py`). `core/signals.py`'s
+`create_folder_for_animal_on_change` (`post_save` receiver on `IbexImage`, ~line 264
+onward) has:
+
+```python
+if instance.side == "L":
+    target_folder = left_folder
+elif instance.side == "R":
+    target_folder = right_folder
+elif instance.side == "O":
+    target_folder = other_folder
+else:
+    pass
+# unconditionally, a few lines later:
+instance.folder = target_folder
+```
+
+For any `instance.side` outside `{"L", "R", "O"}` (including `None`, the field's
+default/unset state), `target_folder` is referenced before assignment —
+**`UnboundLocalError`**, which crashes the signal and, with it, the `.save()` call that
+triggered it. This only fires on the `instance.animal_id != instance._original_animal_id`
+branch, i.e. when an `IbexImage`'s `animal` is set or changed after creation — a
+plausible production sequence if animal assignment happens before manual side-tagging.
+
+**Decision (user, explicit, 2026-07-28)**: stay test-only for the `core/signals.py`
+coverage CR — add a test that documents the crash via `pytest.raises(UnboundLocalError)`
+rather than fixing it inline. Tracked here as its own bug-fix item.
+
+- Trigger: dedicated bug-fix CR — add an explicit `else: target_folder = None` (or
+  raise a clearer domain error, or skip the folder-move entirely) before line
+  `instance.folder = target_folder`; decide the right fallback behavior with the
+  professor (silently skip vs. surface an error) before implementing.
+
+## TODO — `get_decimal_from_dms` raises `TypeError` on malformed input instead of returning `None` (found 2026-07-28)
+
+Surfaced by code-analyst while writing the `core/signals.py` coverage CR's test spec.
+`core/signals.py`'s `get_decimal_from_dms(dms, ref)` has an inner `to_float(value)`
+helper that catches conversion failures and returns `None` on bad input — but the
+function's own arithmetic (`degrees + minutes / 60.0 + seconds / 3600.0`) that consumes
+those `to_float` results sits **outside** the `try/except` that wraps the three
+`to_float` calls. A DMS component that's indexable-but-non-numeric (e.g. the tuple
+`(46.0, 30.0, "abc")`) makes `to_float` return `None` for `seconds`, and the very next
+line's `None / 3600.0` raises an uncaught **`TypeError`**, not the `None` the function's
+apparent contract implies for "any conversion failure."
+
+**Not currently reachable from production traffic in a crashing way**: the only caller,
+`extract_gps_coords`, wraps its `get_decimal_from_dms` calls in its own outer
+`try/except Exception`, which swallows this `TypeError` and returns `(None, None)` —
+so `process_uploaded_image` never sees the crash. This is a latent bug in a function
+whose behavior doesn't match its own internal contract, not an active production
+incident.
+
+**Decision (user, explicit, 2026-07-28)**: stay test-only for the `core/signals.py`
+coverage CR — tests assert the actual `pytest.raises(TypeError)` behavior on malformed
+input (documenting current behavior), not fixed inline.
+
+- Trigger: dedicated bug-fix CR — move the `degrees + minutes/60.0 + seconds/3600.0`
+  arithmetic inside the same `try/except` (or add an explicit `if None in (degrees,
+  minutes, seconds): return None` guard) so the function's return-`None`-on-bad-input
+  contract actually holds for all three components, not just outright indexing
+  failures.
+
+## TODO — dead/unreachable branches in `core/signals.py` (found 2026-07-28)
+
+Surfaced by code-analyst while writing the `core/signals.py` coverage CR's test spec —
+two branches that no test (however constructed) can reach without changing the source,
+which caps that file's achievable measured coverage at ~99%, not 100% (same situation
+`core/models.py` at 98% and `custom_template_tags.py` at 93% already have a documented
+case-by-case `ruff.toml` exception for — see the "ruff-baseline deferred files" TODO
+above).
+
+1. **`core/signals.py:192-193`** — inside `process_uploaded_image`, the `else` branch
+   after `if isinstance(dt_object, datetime.datetime):` is unreachable: `dt_object` is
+   always the direct return value of `datetime.datetime.strptime(...)` on the line
+   immediately above, which either returns a `datetime` instance or raises — it can
+   never reach the `isinstance` check as a non-`datetime` value.
+2. **`core/signals.py:272,274`** (`except User.DoesNotExist:` header at 272, `return`
+   body at 274 — line 273 is a comment, not a counted statement) — inside
+   `create_folder_for_animal_on_change`, this handler cannot fire for a `None` owner:
+   `instance.owner` (line 271) on a null-FK field evaluates to `None` (not a
+   `DoesNotExist` exception), so the very next line (`user.username`, line 275) raises
+   `AttributeError` first, before the `except` clause it's paired with could ever catch
+   anything.
+
+**Decision (user, explicit, 2026-07-28)**: stay test-only for the `core/signals.py`
+coverage CR — both branches left as documented, deliberate coverage gaps rather than
+chased with contrived tests. **Confirmed (2026-07-28, coverage CR landed):**
+`core/signals.py` is at **98% (180 statements, 3 missing: lines 193, 272, 274 — exactly
+these two dead branches, nothing else)** — case-by-case-eligible for the `ruff.toml`
+per-file-ignores removal, same as its two existing precedents (`core/models.py` 98%,
+`custom_template_tags.py` 94%).
+
+- Trigger: dedicated cleanup CR (can be combined with the bug-fix CRs above, since both
+  touch the same functions) — remove the dead `else` at line 192-193; add an explicit
+  `None`-owner guard after line 271 (`if user is None: return`) so the paired `except
+  User.DoesNotExist` either becomes reachable via a correct check or gets removed as
+  dead defensive code, whichever the professor prefers.
+
+## TODO — no mutation testing yet (raised 2026-07-28)
+
+Raised by the professor while the `core/admin.py`/`core/signals.py` coverage push was
+in progress. Confirmed: no `mutmut`/`cosmic-ray` in `pyproject.toml` — no automated
+mutation-testing tool is set up in this project. The only precedent in this repo is a
+one-off manual technique, not a tool: `docs/changes/2026-07-26-auth-hardening-test-
+coverage-gaps.md` used "empirical mutation probes" via a Fable5 adversarial trace (11
+manual probes against live Django/allauth source) to verify specific tests genuinely
+fail when the property they claim to test is removed — a one-time verification, not
+repeatable infra.
+
+Per this project's own `python-testing.md` convention: mutation testing runs *after* a
+test suite exists, not before. The pre-refactor coverage initiative (`core/admin.py`
+done; `core/signals.py` in progress; `core/utils.py`/`core/views.py`/`webibex/urls.py`
+queued next in dependency order) is actively building that suite now — a real
+mutation-testing pass makes most sense as its own follow-up once that initiative wraps.
+
+**Decision (user, explicit, 2026-07-28)**: track as a TODO, sequenced between the
+coverage initiative and the refactor it's gating — NOT deferred indefinitely. Updated
+2026-07-28 (same day, user clarified sequencing): mutation testing is a **hard gate
+before the refactor starts**, not a someday-follow-up. High line coverage alone doesn't
+prove the tests catch real regressions once files start moving/changing shape — a
+mutation-testing pass is what verifies that. Sequencing is now:
+
+1. Coverage initiative (in progress): `core/admin.py` done, `core/signals.py` in
+   progress, `core/utils.py`/`core/views.py`/`webibex/urls.py` queued next in
+   dependency order.
+2. Install `mutmut`, run against every file the coverage initiative touched.
+3. Triage survivors (killable → write a test; equivalent → note why; NR → low-value,
+   note why) per `python-testing.md`'s workflow.
+4. Only then does the planned refactor start.
+
+**Prime candidates already flagged during coverage work** (branch-dense functions,
+newly tested this session — good first mutation-testing targets): `core/admin.py`'s
+`CustomFolderAdmin.tag_left`/`tag_right`/`tag_other` (loop-completeness mutants),
+`core/signals.py`'s `create_folder_for_animal_on_change` (L/R/O branch matrix + two
+filename-parts branches) and `get_decimal_from_dms`/`extract_gps_coords`
+(SIGN/BOUNDARY/FORMAT arithmetic mutants — see the `get_decimal_from_dms` `TypeError`
+finding above, which is exactly the kind of contract violation mutation testing is
+designed to surface).
+
+- Trigger: coverage initiative completes (all deferred-in-`ruff.toml` files at
+  100%/documented-ceiling) → install `mutmut` (per `python-testing.md`'s "mutmut for
+  new projects" guidance) → run against every newly-tested file, starting with
+  `core/admin.py` and `core/signals.py` → triage survivors → THEN start the refactor.
