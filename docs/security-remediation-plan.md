@@ -858,3 +858,27 @@ production (that file only exists for local dev; production always uses
 - Trigger: professor confirms acceptable risk tolerance / budget for a paid tier,
   or this becomes the next priority item given the CI-scaffold gap already blocks
   the B2-cron option from being automated cleanly.
+
+## TODO — `simple_landmarks/views.py` is dead startapp scaffold (found 2026-07-28)
+
+Surfaced during the pre-refactor test-coverage push (see the "ruff-baseline deferred
+files" TODO above — this file is one of the 11 files deferred from the ruff gate for
+below-100% coverage). `simple_landmarks/views.py` is a 1-statement file (`from
+django.shortcuts import render` + a boilerplate comment) at 0% measured coverage.
+
+Confirmed dead, not just currently-disconnected: `git log --follow -- simple_landmarks/
+views.py` shows exactly one commit (`83f73dc "started landmarking standalone app"`,
+2025), never modified since — untouched `django-admin startapp` scaffold. Repo-wide
+grep confirms zero imports of `simple_landmarks.views` anywhere, and the
+`simple_landmarks` app has no `urls.py` to wire it up. `simple_landmarks` itself is a
+real, used app (`INSTALLED_APPS`, `models.py`/`admin.py` actively used by
+`core/admin.py`, `core/signals.py`, `core/views.py`) — only `views.py` is unused.
+
+**Decision (user, explicit, 2026-07-28)**: skip writing a coverage test for this file
+(testing dead code doesn't buy real safety) — flag for deletion in a separate, small
+cleanup CR instead of folding it into the coverage-improvement CR.
+
+- Trigger: dedicated cleanup CR — delete `simple_landmarks/views.py`, remove its entry
+  from `ruff.toml`'s per-file-ignores deferred block (line ~24), confirm `pytest`
+  coverage config (`pytest.ini`'s `--cov=simple_landmarks`) still resolves cleanly with
+  the file gone.
