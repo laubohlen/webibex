@@ -11,7 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from filer.models import Folder
 from PIL import Image
 
-from core.models import Animal, IbexImage, Region
+from core.models import Animal, IbexImage, Location, Region
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +104,16 @@ def region_factory(db):
         }
         defaults.update(overrides)
         return Region.objects.create(**defaults)
+
+    return _make
+
+
+@pytest.fixture
+def location_factory(db):
+    def _make(**overrides):
+        defaults = {}
+        defaults.update(overrides)
+        return Location.objects.create(**defaults)
 
     return _make
 
