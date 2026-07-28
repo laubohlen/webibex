@@ -11,7 +11,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from filer.models import Folder
 from PIL import Image
 
-from core.models import Animal, IbexImage, Location, Region
+from core.models import Animal, IbexChip, IbexImage, Location, Region
+from simple_landmarks.models import Landmark
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +174,7 @@ def corrupted_image():
 
 @pytest.fixture
 def ibex_image_factory(db, user_factory, tiny_png_bytes):
-    def _make(owner=None, side=None, name="upload", **overrides):
+    def _make(owner=None, side=None, name="upload", exif=None, **overrides):
         if owner is None:
             owner = user_factory()
         folder = Folder.objects.filter(
@@ -190,7 +191,49 @@ def ibex_image_factory(db, user_factory, tiny_png_bytes):
             "side": side,
         }
         defaults.update(overrides)
-        return IbexImage.objects.create(**defaults)
+        if exif is None:
+            return IbexImage.objects.create(**defaults)
+        # Direct attribute assignment shadows filer's `exif` cached_property
+        # (filer/models/abstract.py:194-199) so process_uploaded_image sees
+        # the test-supplied EXIF dict instead of trying to read real file
+        # bytes -- confirmed safe this session.
+        obj = IbexImage(**defaults)
+        obj.exif = exif
+        obj.save()
+        return obj
+
+    return _make
+
+
+@pytest.fixture
+def landmark_factory(db):
+    def _make(**overrides):
+        defaults = {"label": "Test Landmark"}
+        defaults.update(overrides)
+        return Landmark.objects.create(**defaults)
+
+    return _make
+
+
+@pytest.fixture
+def ibex_chip_factory(db, user_factory, tiny_png_bytes):
+    def _make(owner=None, name="chip", **overrides):
+        if owner is None:
+            owner = user_factory()
+        folder = Folder.objects.filter(
+            name=f"{owner.username}_files", owner=owner
+        ).first()
+        upload = SimpleUploadedFile(
+            f"{name}.png", tiny_png_bytes, content_type="image/png"
+        )
+        defaults = {
+            "original_filename": upload.name,
+            "file": upload,
+            "folder": folder,
+            "owner": owner,
+        }
+        defaults.update(overrides)
+        return IbexChip.objects.create(**defaults)
 
     return _make
 
