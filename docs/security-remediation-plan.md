@@ -953,9 +953,11 @@ input (documenting current behavior), not fixed inline.
 Surfaced by code-analyst while writing the `core/signals.py` coverage CR's test spec —
 two branches that no test (however constructed) can reach without changing the source,
 which caps that file's achievable measured coverage at ~99%, not 100% (same situation
-`core/models.py` at 98% and `custom_template_tags.py` at 93% already have a documented
-case-by-case `ruff.toml` exception for — see the "ruff-baseline deferred files" TODO
-above).
+`core/models.py` (98%) and `custom_template_tags.py` (measured at **94%** as of this
+session's coverage runs — 16 stmts, 1 miss; the 2026-07-27 TODO above cites 93% for
+the same file, not re-verified here whether that reflects a since-changed stmt count
+or a coverage.py rounding difference) already have a documented case-by-case
+`ruff.toml` exception for — see the "ruff-baseline deferred files" TODO above).
 
 1. **`core/signals.py:192-193`** — inside `process_uploaded_image`, the `else` branch
    after `if isinstance(dt_object, datetime.datetime):` is unreachable: `dt_object` is
