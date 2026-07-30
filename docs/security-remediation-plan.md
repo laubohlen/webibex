@@ -1025,9 +1025,160 @@ newly tested this session — good first mutation-testing targets): `core/admin.
 filename-parts branches) and `get_decimal_from_dms`/`extract_gps_coords`
 (SIGN/BOUNDARY/FORMAT arithmetic mutants — see the `get_decimal_from_dms` `TypeError`
 finding above, which is exactly the kind of contract violation mutation testing is
-designed to surface).
+designed to surface). **Addendum (2026-07-30, `core/utils.py` coverage CR):**
+`process_horn_chip`'s cloud branch (`POSTGRES_LOCALLY=True`) side="R" flip variant
+(mirroring `mirror_coordinate` calls under the cloud, not local, storage path) was
+deliberately left untested this session — a locked decision scoped T09 to the
+local-branch side="L"/"R"/"O" flip matrix only, to keep the CR bounded. It's a good
+mutation-testing candidate once the tool is installed: a mutant that flips
+`image.side == "R"` to always/never true under the cloud branch would currently
+survive.
 
 - Trigger: coverage initiative completes (all deferred-in-`ruff.toml` files at
   100%/documented-ceiling) → install `mutmut` (per `python-testing.md`'s "mutmut for
   new projects" guidance) → run against every newly-tested file, starting with
   `core/admin.py` and `core/signals.py` → triage survivors → THEN start the refactor.
+
+## TODO — `generate_animal_id_code`: >999 rollover collision, no prefix scoping, first-3-digit-run misparse (found 2026-07-30)
+
+Surfaced by code-analyst while scoping the `core/utils.py` coverage CR (3rd file in
+the pre-refactor test-coverage push, after `core/admin.py` and `core/signals.py`).
+`core/utils.py`'s `generate_animal_id_code` (~line 170 onward) has three distinct
+issues, all in the same ~20-line function:
+
+1. **`>999` rollover collision** (line 186-187): `id_number = max(matched_numbers) + 1
+   if matched_numbers else 1` followed by `new_code = f"{prefix}_{id_number:03}"`. The
+   `:03` format spec is a *minimum* width, not a truncation — once `id_number` reaches
+   1000, `f"{1000:03}"` renders as `"1000"` (4 digits), identical to how a
+   pre-existing `"PN24_1000"` row would already render. Seeding both `"PN24_999"` and
+   `"PN24_1000"` and calling `generate_animal_id_code("PN24_---_....jpg")` returns
+   `"PN24_1000"` again — a genuine duplicate `id_code` in the `Animal` table, not just
+   a display quirk (confirmed via `Animal.objects.filter(id_code=result).exists()`).
+2. **No prefix scoping** (line 176): `Animal.objects.filter(id_code__contains="_")`
+   pulls every underscore-containing `id_code` in the entire table, regardless of the
+   new filename's location/year prefix. A row like `"ZZZZ_050"` (a different
+   location/year) contributes to the `max()` used for a `"PN24_..."` generation,
+   producing `"PN24_051"` instead of `"PN24_001"`.
+3. **First-3-digit-run misparse** (line 180-185): `re.findall(r"\d{3}", i)` returns
+   *every* non-overlapping 3-digit run in the id_code string, and `i[0]` (not `i[-1]`)
+   is used — the *first* match, not the counter suffix. For an id_code like
+   `"PN2024_001"`, the year digits `"2024"` produce a 3-digit match `"202"` before the
+   scan ever reaches the real counter `"001"`; `"202"` (not `"001"`) is what feeds the
+   `max()`, so the next generated code is `"PN2024_203"`, not `"PN2024_002"`.
+
+**Backward-compatible fix direction** (no DB migration needed — `id_code` stays a
+plain `CharField`): anchor the digit extraction at the *end* of the string instead of
+scanning for any 3-digit run, e.g. `code.split("_")[-1]` (if the suffix is guaranteed
+numeric) or `re.search(r"(\d+)$", code)`; and scope the queryset with
+`id_code__startswith=prefix` instead of the blanket `id_code__contains="_"` to fix the
+no-prefix-scoping issue. The `>999` rollover needs an explicit decision (reject/renumber/
+widen the field) since `Animal.id_code` is `max_length=10` (`core/models.py:17`) and a
+padding scheme change could affect existing sort/display assumptions.
+
+**Decision (this CR, test-only by design, 2026-07-30)**: pin current behavior via
+`pytest.raises`-free assertions on the literal (buggy) output — `test_generate_animal_id_code_rollover_collision`
+(plus its just-under-rollover boundary control) and the parametrized
+`test_generate_animal_id_code_known_bugs` (rollover simple form, first-3-digit-run
+misparse, no prefix scoping) in `tests/core/test_utils_db.py` — not fixed inline.
+`logger.debug()` instrumentation for this function is explicitly deferred to a
+separate future change, not part of this CR.
+
+- Trigger: dedicated bug-fix CR — decide the prefix-scoping and rollover-format
+  scheme with the professor (reject id_codes >999? widen to 4 digits? per-prefix
+  counters?) before implementing; touches the same function as the mutation-testing
+  TODO above, could be combined with that gate.
+
+## TODO — dead code and missing guards in `process_horn_chip` (found 2026-07-30)
+
+Surfaced by code-analyst while writing the `core/utils.py` coverage CR's test spec.
+`process_horn_chip` (core/utils.py:345-483) has four separate findings:
+
+1. **Dead `chip_url` assignments** (lines 359 and 479): both branches compute
+   `chip_url` (local: `os.path.join(os.path.split(image.url)[0], chip_name)`; cloud:
+   `ibex_chip.file.url`), but the variable is never read again in the function or
+   returned to the caller — the assignment executes (counts as "covered" by coverage.py)
+   but has no effect. Not a coverage gap, a dead-code smell.
+2. **Commented-out `b2_utils.delete_files` call** (lines 398-399, inside the `if
+   file_exists:` block): the very next `print()` (lines 400-402) claims `"File
+   {chip_bucket_path} deleted from B2 bucket and IbexChip deleted from the
+   database"` — but only the DB row is actually deleted; the B2 file deletion call
+   itself is commented out. The log message is factually false, and every replaced
+   cloud chip leaves an orphaned file on Backblaze B2. Pinned via
+   `test_process_horn_chip_cloud_replaces_existing_chip_no_b2_delete`'s
+   `delete_mock.assert_not_called()`.
+3. **Missing `None`-guard asymmetry** (line 415 vs. `embed_new_chip`'s line 274-276):
+   `img_object = b2_utils.download_file(...)` in `process_horn_chip`'s cloud branch has
+   no `if img_object is None: raise ValueError(...)` guard, unlike `embed_new_chip`'s
+   equivalent call, which explicitly checks and raises `ValueError("Failed to download
+   image from Backblaze B2.")`. The asymmetry means `process_horn_chip` raises a raw,
+   un-domained `TypeError: a bytes-like object is required, not 'NoneType'` from
+   `np.frombuffer(None, ...)` (line 417) instead of a clear domain error. Pinned via
+   `test_process_horn_chip_cloud_download_returns_none_raises_type_error`. Related: an
+   empty-bytes `b""` download (distinct from `None`) hits a *third*, uncaught failure
+   mode — a raw `cv2.error` (`!buf.empty()` assertion) from `cv2.imdecode`, before the
+   existing `img is None` check at line 422 is ever reached — pinned via
+   `test_process_horn_chip_cloud_empty_bytes_raises_cv2_error`.
+4. **File/row desync produces two different failure modes** (local branch): if the
+   chip *file* exists on disk but no matching `IbexChip` DB row exists,
+   `get_object_or_404(IbexChip, ibex_image_id=image.id)` (line 365) raises `Http404`
+   (pinned via `test_process_horn_chip_local_file_without_row_raises_404`). If the DB
+   *row* exists but the chip file is missing, the `chip_path.is_file()` guard (line
+   363) is `False`, so the function skips straight to `IbexChip.objects.create(...)`
+   (line 461) — which collides with the OneToOne `ibex_image` constraint on the
+   already-existing row, raising `IntegrityError` (pinned via
+   `test_process_horn_chip_local_row_without_file_raises_integrity_error`). Same
+   underlying "state inconsistency" bug, but the caller sees a 404 or a 500 depending
+   on which side of the (file, row) pair is missing.
+
+**Fix direction**: (1) remove the two dead `chip_url` assignments, or wire the value
+through to whatever was meant to consume it; (2) either restore
+`b2_utils.delete_files([chip_bucket_path])` (with B2 test coverage added) or correct
+the log message to stop claiming a deletion that never happens; (3) add the missing
+`None`-guard mirroring `embed_new_chip`'s, and decide whether `b""` should be
+special-cased before it reaches `cv2.imdecode`; (4) decide the desired file/row-desync
+behavior (always 404? an automatic repair path?) and implement it consistently across
+both the local and cloud branches.
+
+**Decision (this CR, test-only by design, 2026-07-30)**: all four findings pinned via
+`pytest.raises`/negative mock assertions in `tests/core/test_utils_process_horn_chip.py`,
+none fixed inline. Do not uncomment `b2_utils.delete_files` without updating the
+pinning test (`delete_mock.assert_not_called()`) to the opposite assertion first.
+
+- Trigger: dedicated bug-fix/cleanup CR — touches both the local and cloud branches
+  plus B2 bucket cleanup semantics; decide desired behavior with the professor before
+  implementing. Could combine with the mutation-testing TODO's flagged candidates
+  once `process_horn_chip` itself becomes a mutation-testing target.
+
+## TODO — `parse_coordinates` validates request input with bare `assert` (found 2026-07-30)
+
+Surfaced by code-analyst while writing the `core/utils.py` coverage CR's test spec.
+`core/utils.py`'s `parse_coordinates` (lines 36-45) validates the incoming request's
+query-string coordinates with two bare `assert` statements: `assert len(keys) == 1`
+(line 38) and `assert len(coordinates.split(",")) == 2` (line 41). Per
+`python-security.md`'s Dangerous Patterns table, `assert` in production code is a
+double risk on untrusted input:
+
+1. **Stripped by `python -O`**: running Python with optimizations removes all `assert`
+   statements entirely — the validation silently disappears, and malformed input
+   (zero or multiple query keys, malformed key format) flows straight into
+   `coordinates.split(",")`/`int(x)`/`int(y)` unguarded.
+2. **Wrong error surface**: even without `-O`, an `AssertionError` is an uncaught
+   exception from Django's perspective — it surfaces as a 500 Internal Server Error,
+   not the 400 Bad Request that malformed *client* input should produce. The
+   function's own comment (line 35) already acknowledges this: `"will crash server if
+   they are coming in unexpected format"` — a known, accepted design gap from the
+   original author, not something introduced by this CR.
+
+Pinned via `test_parse_coordinates_assertion_errors` (zero keys, two keys, malformed
+single-key splits → `AssertionError`, no `match=` since the message is empty) and
+`test_parse_coordinates_value_error` (non-integer values → `ValueError`) in
+`tests/core/test_utils_pure.py`.
+
+**Decision (this CR, test-only by design, 2026-07-30)**: pin current behavior only —
+both asserts and the resulting 500-on-malformed-input behavior left in place.
+
+- Trigger: dedicated bug-fix CR — replace both bare `assert`s with explicit
+  `if not (...): raise ...` producing a clear 400-mapped error (e.g. `Http404` or a
+  dedicated `BadRequest`-mapped exception), and decide the desired client-facing error
+  contract (JSON error body vs. redirect) with the professor before implementing,
+  since this function backs the landmarking UI's coordinate submission endpoint.
