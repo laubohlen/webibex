@@ -187,3 +187,4 @@ cython_debug/
 tmp/
 .post-production-stamp
 *.wl-backup
+docs/session-notes-*.md
