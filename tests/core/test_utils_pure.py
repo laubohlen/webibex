@@ -1,4 +1,4 @@
-"""T06-T22: pure-function scenarios from core/utils.py.
+"""T01-T22: pure-function scenarios from core/utils.py.
 
 P0 -- duck-typed stub objects only, no real Django models (per finalized
 decision #4). Bugs B1-B3 are pinned via pytest.raises(...), not fixed
@@ -12,11 +12,17 @@ representative inputs (boundary, small, large, non-square) instead --
 same invariants asserted, deterministic rather than randomly generated.
 Swap back to Hypothesis once the dependency is added and verified in an
 environment with network access.
+
+NOTE on parse_coordinates (T01-T05): uses `django.test.RequestFactory` to
+build real `HttpRequest` objects (for `.GET` query-dict parsing) -- no
+database is involved, so these stay in this DB-free module alongside the
+other pure-function tests.
 """
 
 import cv2
 import numpy as np
 import pytest
+from django.test import RequestFactory
 
 from core.utils import (
     all_diffs_np,
@@ -25,11 +31,51 @@ from core.utils import (
     id_color_mapping,
     mirror_coordinate,
     overlapping_regions,
+    parse_coordinates,
     parse_datetime_from_filename,
     percentage_coordinate,
     scale_coordinate,
     similarityTransform,
 )
+
+
+# T01/T06 --------------------------------------------------------------
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("214,243", (214, 243)),
+        ("-5,-3", (-5, -3)),  # T06: negative coords accepted unvalidated, no guard
+    ],
+)
+def test_parse_coordinates_happy_path(query, expected):
+    request = RequestFactory().get(f"/0.png?{query}")
+    assert parse_coordinates(request) == expected
+
+
+# T02/T03/T04 ------------------------------------------------------------
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/0.png",  # T02: zero keys (assert len(keys) == 1, core/utils.py:38)
+        "/0.png?214,243&1,2",  # T03: two keys
+        "/0.png?214",  # T04a: single key, malformed split (1 part, not 2)
+        "/0.png?1,2,3",  # T04b: single key, malformed split (3 parts, not 2)
+    ],
+)
+def test_parse_coordinates_assertion_errors(url):
+    """Bug: bare `assert` in production code (core/utils.py:38,41) -- pinned
+    as-is, not fixed. No `match=` here: the AssertionError message is empty."""
+    request = RequestFactory().get(url)
+    with pytest.raises(AssertionError):
+        parse_coordinates(request)
+
+
+# T05 ---------------------------------------------------------------------
+@pytest.mark.parametrize("query", ["a,b", "214,b", "1.5,2.5"])
+def test_parse_coordinates_value_error(query):
+    request = RequestFactory().get(f"/0.png?{query}")
+    with pytest.raises(ValueError, match="invalid literal for int"):
+        parse_coordinates(request)
 
 
 # T06 ----------------------------------------------------------------------

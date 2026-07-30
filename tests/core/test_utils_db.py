@@ -3,7 +3,7 @@
 import pytest
 from django.test import RequestFactory, override_settings
 
-from core.models import Location, Region
+from core.models import Animal, Location, Region
 from core.utils import generate_animal_id_code, get_task_request_origin, multi_task_url
 
 
@@ -62,6 +62,70 @@ def test_generate_animal_id_code_mixed_valid_and_malformed_uses_max_of_valid(
     result = generate_animal_id_code("PNGP24_---_24_06_15_174811.jpg")
 
     assert result == "PNGP24_008"
+
+
+# T17 ---------------------------------------------------------------------
+@pytest.mark.django_db
+def test_generate_animal_id_code_rollover_collision(animal_factory):
+    """Bug (pinned, not fixed): `f"{id_number:03}"` formats numbers >= 1000
+    without padding truncation, so both "PN24_999" -> 1000 and a pre-existing
+    "PN24_1000" collide on the same rendered code -- a real duplicate
+    id_code, not just a display artifact."""
+    animal_factory(id_code="PN24_999")
+    animal_factory(id_code="PN24_1000")
+
+    result = generate_animal_id_code("PN24_---_24_06_15_174811.jpg")
+
+    assert result == "PN24_1000"
+    assert Animal.objects.filter(id_code=result).exists()  # proves the COLLISION
+
+
+@pytest.mark.django_db
+def test_generate_animal_id_code_no_collision_just_under_rollover(animal_factory):
+    """Boundary control for T17: seeding only up to "PN24_999" (no existing
+    "PN24_1000" row) means the new code is genuinely unique -- the collision
+    above is specifically about the >=1000 rollover, not generation itself."""
+    animal_factory(id_code="PN24_998")
+    animal_factory(id_code="PN24_999")
+
+    result = generate_animal_id_code("PN24_---_24_06_15_174811.jpg")
+
+    assert result == "PN24_1000"
+
+
+# T18/T19/T20 --------------------------------------------------------------
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "seed_id_code,filename,expected",
+    [
+        ("PN24_1000", "PN24_x.jpg", "PN24_101"),  # T18: rollover, simple form
+        (
+            "PN2024_001",
+            "PN2024_---_24_06_15_174811.jpg",
+            "PN2024_203",
+        ),  # T19: first-3-digit-run misparse (matches "202" from the seeded
+        # id_code's own "2024" prefix digits, before reaching "001")
+        (
+            "ZZZZ_050",
+            "PN24_---_24_06_15_174811.jpg",
+            "PN24_051",
+        ),  # T20: no prefix scoping -- any existing "_"-containing id_code counts
+    ],
+)
+def test_generate_animal_id_code_known_bugs(
+    animal_factory, seed_id_code, filename, expected
+):
+    """Bugs (pinned, not fixed): the `re.findall(r"\\d{3}", id_code)` pattern
+    grabs the FIRST 3-digit run in the whole id_code string -- not
+    necessarily the trailing counter -- and `previous_generated_codes` is
+    never scoped to the new filename's prefix, so any "_"-containing
+    id_code in the table (regardless of location/year prefix) contributes
+    to the max()."""
+    animal_factory(id_code=seed_id_code)
+
+    result = generate_animal_id_code(filename)
+
+    assert result == expected
 
 
 # T29 -----------------------------------------------------------------------
