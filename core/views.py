@@ -841,6 +841,8 @@ def multi_task_view(request):
         elif task == "tag_other":
             IbexImage.objects.filter(id__in=selected_img_ids).update(side="O")
             return redirect("unidentified-images")
+        elif task == "delete":
+            return redirect("unidentified-images")
 
         else:
             # current image
