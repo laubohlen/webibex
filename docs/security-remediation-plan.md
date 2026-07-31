@@ -97,31 +97,81 @@ corrupt image bytes, missing local file) alongside 2 structural regression guard
 (`hasattr` checks confirming `get_tf`/`ENDPOINT_LOCALLY` are gone — both went red
 against pre-deletion code, green after, proving they're real guards not tautologies).
 
-### OpenStreetMap ToS exposure (CR-2)
+### OpenStreetMap ToS exposure (CR-2) — status: on the radar, not blocking (2026-07-31)
 
-webibex hits `tile.openstreetmap.org/{z}/{x}/{y}.png` directly via Leaflet in 7 templates
-(region create/update/read/delete/naming-error, location create, multi-location create).
-Attribution is correct, but OSMF's Tile Usage Policy is explicit that this server is for
-light/dev/evaluation use only — OSMF can throttle/block without warning.
+webibex hits `tile.openstreetmap.org/{z}/{x}/{y}.png` directly via Leaflet in
+**6 templates**, verified by grep 2026-07-31 (doc previously said 7 — corrected):
+`templates/core/location_create.html`, `multi_location_create.html`,
+`region_create_naming_error.html`, `region_delete.html`, `region_read.html`,
+`region_update.html`. Each template has its own inline `<script>` block with a
+duplicated `L.tileLayer(...)` call — there's no shared partial/include for the map
+JS. `region_create.html` itself has no map (only its `_naming_error` variant does).
+Attribution is correct, but OSMF's Tile Usage Policy is explicit that this server is
+for light/dev/evaluation use only — OSMF can throttle/block without warning.
 
-**Fix**: swap to **MapTiler** (same `L.tileLayer()` call shape, different URL + API key,
-across all 7 templates). Verified against professor-confirmed scale (20-50 non-concurrent
-users): MapTiler's free tier is 5,000 map-sessions/month (session-based — panning within a
-session is free), no non-commercial restriction. Compared against Stadia Maps (200,000
-credits/month but explicitly non-commercial-use-only — disqualifying) and Thunderforest
-(150,000 tile-requests/month). Even a generous estimate (~25k tile-equivalents/month)
-leaves 6-10x headroom on all three; MapTiler chosen for the session-based accounting plus
-no non-commercial restriction to verify against the university's status.
+**Fix**: swap to **MapTiler** (same `L.tileLayer()` call shape, different URL + API
+key). Verified against professor-confirmed scale (20-50 non-concurrent users):
+MapTiler's free tier is 5,000 map-sessions/month (session-based — panning within a
+session is free), no non-commercial restriction. Compared against Stadia Maps
+(200,000 credits/month but explicitly non-commercial-use-only — disqualifying) and
+Thunderforest (150,000 tile-requests/month). Even a generous estimate (~25k
+tile-equivalents/month) leaves 6-10x headroom on all three; MapTiler chosen for the
+session-based accounting plus no non-commercial restriction to verify against the
+university's status.
 
-### Auto-match-or-new-ID requirement (CR-1) — mostly already built
+**Implementation checklist — beyond just getting a MapTiler (or similar) account +
+API key** (verified this session: Leaflet 1.9.4 loaded via CDN in `templates/base.html`,
+no CSP/`django-csp` configured anywhere in `webibex/settings.py` — confirmed by
+grep, so no CSP whitelist step needed):
+1. Add the key as an env var (`env("MAPTILER_API_KEY")` in `webibex/settings.py`,
+   following the exact pattern already used for `AWS_ACCESS_KEY_ID` etc.) — set it
+   in Railway's env vars for prod, and in local `.env`/`.env.local` for dev.
+2. Since the 6 templates each inline their own `<script>` block (no shared JS
+   include), the key needs to reach all 6 — cleanest is a Django context processor
+   injecting `MAPTILER_API_KEY` into every template context, rather than threading
+   it through each view's render call individually.
+3. Update the tile URL + attribution string in all 6 templates. **Attribution is
+   not a straight swap** — MapTiler's ToS requires its own attribution alongside
+   OSM's (not just the current OSM-only copyright line) — confirm the exact
+   required wording against MapTiler's current ToS at implementation time, don't
+   assume.
+4. Restrict the API key by domain/referrer in the MapTiler dashboard (prod domain
+   + local dev) — the key is inherently visible client-side (Leaflet tile requests
+   are always browser-side), so domain restriction is the actual mitigation against
+   quota theft, not secrecy.
+5. No CSP update needed (confirmed above) — one less step than a typical
+   third-party-embed swap.
+6. No browser/E2E test suite currently exercises these map pages (confirmed no
+   Playwright/Selenium in this repo) — nothing to mock for CI today, but flag it
+   if such tests are added later so they don't hit live MapTiler quota.
+7. Update `.env`/deployment docs to note the new required env var so a future
+   redeploy doesn't silently break maps by omission.
+8. Flip this section's status to done once shipped, matching the other resolved
+   items in this doc.
+
+- Trigger: not urgent at current scale (6-10x headroom), but should happen before
+  OSMF actually throttles/blocks — no fixed deadline, just don't let it linger
+  indefinitely.
+
+### Auto-match-or-new-ID requirement (CR-1) — fully already built (corrected 2026-07-31)
 
 Unlike the ibex_stambecchi HF Space (which genuinely lacks search at upload time),
 webibex's `default_chip_compare_view` / `project_chip_compare_view` /
 `geographic_chip_compare_view` already run full nearest-neighbor gallery search and show
 top-5 matches with distances before any human decision; `created_animal_view` already
-exists as the "no match" path. A `threshold_distance = 9.3` constant is defined but only
-displayed, not used to auto-decide. Gap is UX polish (auto-suggest/pre-highlight using the
-existing threshold), not new architecture.
+exists as the "no match" path.
+
+**Correction**: the line above about the threshold being "only displayed, not used to
+auto-decide" was wrong — verified against the actual templates this session.
+`templates/core/result_default.html:94-98` and `result_refined.html:98-102` already
+color-code every candidate: **green badge** if `distance <= threshold` (9.3, meaning a
+reliable identification), **red badge** otherwise (unlikely to be the same animal). The
+domain semantics (explained by the developer this session): below 9.3 is a reliable
+match, above it is unlikely to be the same animal — exactly what the green/red badges
+already encode. No gap here; nothing to build. Second finding this
+session (after the `new-ibex` button) where this doc undersold what's already shipped —
+worth a skim of the remaining "mostly already built" / "gap" claims in this doc for the
+same staleness before trusting them at face value.
 
 ## Remediation plan — 6-9 person-days
 
@@ -794,6 +844,29 @@ django-stubs-gap errors, unchanged) and full test suite green (184 passed,
 1 skipped, 1 xfailed, coverage unchanged). See
 `docs/changes/2026-07-27-ruff-coverage-gate-expansion.md`.
 
+**STALE — flagged 2026-07-31 (docs-accuracy pass), not fixed here (config
+change, out of scope for a docs check):** live `pytest --cov` run this
+session shows `core/admin.py` and `core/utils.py` both at **100%** measured
+coverage right now (251 passed, 1 skipped, 1 xfailed) — same graduation
+condition that already got `core/models.py`/`custom_template_tags.py`
+re-enabled above. But `ruff.toml`'s `per-file-ignores` **still lists both of
+them as deferred** (full ruleset suppressed), unlike `core/models.py`/
+`custom_template_tags.py` which were correctly removed from that list. Per
+this doc's own stated policy ("remove its `per-file-ignores` entry... one
+line at a time"), these two entries should have been removed already. Actual
+current coverage snapshot, for reference (same run): `core/signals.py` 98%
+(3 missing, matches the already-documented dead branches below — correctly
+still deferred), `custom_template_tags.py` 94% (correctly not deferred),
+`core/views.py` 23%, `webibex/urls.py` 50%, `simple_landmarks/views.py` 0%
+(all three correctly still deferred, unchanged from the original table) —
+`core/admin.py`/`core/utils.py` are the only two entries actually out of
+sync with reality.
+
+- Trigger: remove `"core/admin.py"` and `"core/utils.py"` from `ruff.toml`'s
+  `per-file-ignores`, run `ruff check` on both to see what fires, triage as
+  its own small CR — same mechanical process already used for
+  `core/models.py`/`custom_template_tags.py` above.
+
 ## TODO — SonarQube first-ever scan findings, webibex (found 2026-07-27)
 
 `webibex`'s first-ever SonarQube analysis ran this session (host-side,
@@ -858,6 +931,188 @@ production (that file only exists for local dev; production always uses
 - Trigger: professor confirms acceptable risk tolerance / budget for a paid tier,
   or this becomes the next priority item given the CI-scaffold gap already blocks
   the B2-cron option from being automated cleanly.
+
+**Cost research (2026-07-31)**, direct from Railway's own docs
+([backups](https://docs.railway.com/volumes/backups),
+[point-in-time recovery](https://docs.railway.com/volumes/point-in-time-recovery),
+[pricing](https://railway.com/pricing)):
+- Volume/backup storage is billed at **$0.00000006/GB/second ≈ $2.59/GB-month**,
+  incremental/copy-on-write (only the bytes unique to each backup are charged).
+  Scheduled backups: daily kept 6 days, weekly kept 1 month, monthly kept 3
+  months. PITR retains roughly the last 4 full backups (~4 weeks). Manual
+  backups are capped at 50% of the volume's size.
+- The docs themselves don't explicitly gate backups/PITR to a paid tier, but this
+  contradicts what the user directly observed in the actual Railway dashboard
+  (paid-plan-only) — trusting the live-account observation over ambiguous docs.
+  Under that constraint, the real cost isn't the per-GB storage rate (our DB is
+  small, this would be low single-digit dollars/month) — it's the **plan-tier
+  delta**: Hobby is $5/mo, Pro is $20/mo, so unlocking Railway's built-in backups
+  costs **~$15/mo more** than what's already being paid, regardless of actual
+  data volume.
+- Compare to the already-planned DIY option (this session's fix batch, R1: a
+  `backup_db` management command doing `pg_dump` → gzip → push to the existing
+  B2 bucket): Backblaze B2 storage runs roughly $6/TB/month
+  (~$0.006/GB-month), and there's no new service/account needed — `core/b2_utils.py`
+  already has working credentials/access. Marginal cost is effectively cents/month,
+  not $15/mo.
+- **Revised decision (2026-07-31, supersedes the "skip Pro" recommendation
+  above)**: the DIY `backup_db` → B2 script is PAUSED, not being built right
+  now. Cost isn't the only variable — the DIY path also costs *developer time*
+  (build + the mandatory restore-drill verification below) before it's trusted
+  for production, whereas Railway Pro's built-in backups are available
+  immediately, no dev/verification wait. This is genuinely the professor's
+  call, not an engineering one: pay ~$15/mo more starting now for an
+  immediately-available backup, vs. free but wait (roughly) a couple of dev
+  sessions for the DIY script to be built and restore-verified. Question is
+  in the outstanding-questions email draft
+  (`ibex_stambecchi/tmp/draft-email-professor-open-questions.md`). Do not
+  resume building the DIY script until she answers.
+
+## GATE — restore drill required before the id_code max_length migration ships (added 2026-07-31, updated 2026-07-31)
+
+The current MVP-safety batch includes a schema migration (`Animal.id_code`
+`CharField(max_length=10)` → `max_length=20`, widening only, no data loss). **Hard
+requirement, decided by the user 2026-07-31: do not deploy that migration (or any
+future migration) to production until whichever backup mechanism is in place has
+been proven to actually restore, not just to run and upload successfully.** A
+backup that writes a file but has never been restored is unverified — the point of
+a backup is recoverability, not the act of dumping.
+
+Which mechanism this applies to now depends on the professor's answer to the
+pay-now-vs-wait question above:
+- If she picks **Railway Pro**: verify a restore through Railway's own UI/CLI
+  restore flow before trusting it (still don't skip verification just because
+  it's a vendor feature).
+- If she picks **DIY B2 script**: resume building `backup_db` (currently
+  paused), then run the drill below.
+
+Restore-drill checklist (applies either way):
+1. Produce a backup via whichever mechanism was chosen, against a real (or
+   realistic staging-equivalent) Postgres instance.
+2. Actually restore that backup into a separate/scratch Postgres database.
+3. Verify the restored DB is usable — at minimum, row counts match on `Animal`,
+   `Region`, `Location`, `IbexImage`, `IbexChip`, `Embedding`, and a spot-check
+   query (e.g. fetch one `Animal` by `id_code`) returns the expected data.
+4. Only once that restore drill passes does the migration go out.
+
+- Trigger: this gate is checked once, immediately before this batch's production
+  deploy — not a recurring requirement, but every future backup-mechanism change
+  should re-trigger a fresh restore drill before its next prod migration.
+
+## TODO — image/chip backup is a separate question from the DB backup above (found 2026-07-31)
+
+Everything above (GATE, cost research) is about the Postgres DB — it does NOT cover
+the actual photos/chips, which live in Backblaze B2 (`core/b2_utils.py`), a wholly
+separate storage system. B2 itself is already durable cloud object storage, so it
+isn't exposed to the "Railway volume gets wiped" risk driving the DB backup
+discussion. The real risk to images is our own app code deleting them: confirmed,
+`core/b2_utils.py:66-74`, `delete_files()`, performs a real hard-delete via the
+S3-compatible `delete_objects` API — this is what the working single-image Delete
+button calls today, and would be what any future real multi-delete implementation
+(see the Tools-menu Delete TODO above) calls too.
+
+**Mitigation is a B2 bucket-level setting, not app code**: Backblaze B2 supports file
+versioning/Object Lock at the bucket level — if enabled, an accidental delete keeps
+the prior version recoverable for a retention window. Whether this is currently
+enabled on the production bucket is unknown — needs checking directly in the B2
+console, not visible from this repo.
+
+- Trigger: decide alongside the still-open "what should Delete actually do" design
+  question above, so real delete semantics and B2 versioning settings end up
+  consistent (e.g., even a hard delete from the app stays recoverable at the
+  storage layer for N days if versioning is on). Not blocking current work.
+
+## TODO — ransomware/mass-deletion remediation: immutable backups (found 2026-07-31)
+
+Raised explicitly: is immutable/versioned backup "a thing" against ransomware-style
+attacks (compromised credentials used to delete or overwrite both live data and its
+backups)? Yes — this is a standard, well-established pattern, not exotic:
+
+- **Object Lock / WORM (write-once-read-many)** is the mechanism. Both Backblaze B2
+  and AWS S3 (and S3-compatible stores generally) support it at the bucket level. Two
+  modes: **governance mode** (privileged/root credentials can still override/delete)
+  and **compliance mode** (nobody — not even the account owner — can delete or
+  overwrite a locked object before its retention period expires, full stop). This is
+  distinct from the plain versioning discussed in the TODO above (which protects
+  against *accidental* app-level deletes but not a *malicious* actor with delete
+  permissions on the account).
+- **Applies to two places, not just one**: (a) wherever the Postgres DB backups land
+  (whichever mechanism the professor picks — Railway Pro's built-in backups or the
+  paused DIY B2 script), and (b) the B2 bucket holding the actual photos/chips
+  themselves. A ransomware scenario that compromises the app's B2 credentials could
+  otherwise delete live images AND any backup copies sitting in the same bucket with
+  the same credentials — Object Lock in compliance mode is specifically designed to
+  prevent exactly that.
+- **Credential blast-radius matters as much as Object Lock itself**: if backups are
+  written using the same B2 application key the live app uses (which already has
+  delete permission, per the TODO above), a compromise of that one credential
+  threatens both live data and backups together. Best practice: use a separate,
+  minimally-privileged B2 application key for writing backups (write-only, no delete
+  permission if B2's key-scoping supports it), ideally to a separate bucket, so a
+  compromised app credential can't reach the backup copies at all.
+- **Not evaluated in depth yet**: exact retention period, governance vs. compliance
+  mode choice (compliance mode is stronger but also means genuinely nobody can delete
+  early, including us, if we ever need to for a legitimate reason — e.g. GDPR-style
+  erasure requests), and whether a fully separate provider/account (true offsite,
+  beyond even a compromised B2 account) is warranted given the actual threat model at
+  this scale (~tens of users, academic research data, not high-value financial data).
+
+**Feasibility check (2026-07-31), direct from Backblaze's own docs**: Object Lock
+works with the current plan, no upgrade needed — *"There is no extra cost to use
+Object Lock. However, you are responsible for the normal charges that are
+associated with storing the locked file."* No plan-tier gating found anywhere in
+Backblaze's documentation; it reads as a standard feature, not an upsell. Practical
+notes:
+- Can be added to an **existing** bucket (not just at creation), via the web console
+  or the `b2_update_bucket` API call — the current webibex bucket doesn't need to be
+  recreated.
+- **Once enabled, it cannot be disabled** — a one-way switch, so retention period
+  should be chosen deliberately before flipping it on, not left as a default.
+- Cannot be enabled on restricted buckets, shared buckets, snapshots, or buckets with
+  replication configured. The webibex bucket appears to be a plain private bucket
+  (per `core/b2_utils.py`), so this exclusion likely doesn't apply — not confirmed,
+  needs checking directly in the B2 console (not visible from this repo).
+- Managing retention settings needs specific app-key capabilities
+  (`readBucketRetentions`/`writeBucketRetentions`) — a one-time setup/admin action,
+  not something the app's day-to-day runtime credentials need.
+
+- Trigger: decide alongside the DB-backup mechanism choice (professor's pay-vs-wait
+  call) and the B2-versioning decision above, so all three data-protection layers
+  (DB backup, image versioning, ransomware/immutability) get resolved together rather
+  than piecemeal. Not blocking current work — this is a hardening layer on top of the
+  basic backup, not a prerequisite for it.
+
+## TODO — no real browser-automation tool available for manual E2E checks (found 2026-08-01)
+
+While manually verifying the Tools-menu Delete-crash fix, no browser-automation tool
+was actually available in this sandbox: `chromium-cli` not installed, `npm install
+playwright` returns a 403 from the npm registry, and system `pip install playwright`
+is blocked (externally-managed environment). Fell back to driving the live dev server
+directly over HTTP with `requests` instead — valid for this specific check (the Tools
+dropdown is plain server-rendered HTML, no client-side option generation), but not a
+substitute for a real browser/JS-level check in general.
+
+**User has a playwright-vnc Docker image available** that could be bound in for this —
+would let this kind of manual E2E check (and possibly a future proper automated
+Playwright suite, see the CI-scaffold gap already tracked above) actually drive a real
+browser instead of HTTP-only checks. Not set up yet, explicitly deferred ("maybe not
+right now").
+
+- Trigger: next time a change needs real browser/JS-level verification (not just
+  server-rendered HTML), or when the CI-scaffold work above is picked up and a decision
+  is made on whether to invest in an automated Playwright suite at all.
+
+## TODO — no test-strategy-review has ever been logged for this project (found 2026-08-01)
+
+Surfaced by post-production's periodic check (`~/.claude/feedback/log.jsonl` has zero
+`test-strategy-review` entries for `webibex`). Deferred this session — the change being
+reviewed was small and already had 28 targeted tests; a full project-wide test-strategy
+audit against the `python-testing.md` checklist (test type coverage, deferred
+candidates, mutation operators, property styles, fuzzing corpus) is a separate,
+deliberate task, not a side effect of a small commit.
+
+- Trigger: next dedicated test-infrastructure session, or when this keeps resurfacing
+  across future post-production runs.
 
 ## TODO — `simple_landmarks/views.py` is dead startapp scaffold (found 2026-07-28)
 
