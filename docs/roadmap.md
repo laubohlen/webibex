@@ -58,6 +58,52 @@ Laurens directly); the `dhi.io/tensorflow-serving:2` hardened-base-image
 swap for the production RunPod serving container (draft patch not yet
 applied, separate from the migration itself).
 
+**New from a devcontainer-guard cross-project image-usage audit (2026-08-04)** — handoff
+originated as gitignored `tmp/2026-08-04-dhi-python-hardening-and-subprocess-audit.md`;
+folded in full here per that doc's own instruction ("fold into a real TODO tracker ... safe
+to delete once read") so the findings survive independent of the untracked file:
+- **Which worker Dockerfile is actually live is unresolved from repo content alone.** Two
+  candidates exist, both under gitignored/untracked `tmp/inference/`, with no repo-level signal
+  (CI, compose, docs) pointing at one over the other: `tmp/inference/runpod_ibex_embedding_endpoint/Dockerfile`
+  (`python:3.12`) vs `tmp/inference/ibex_identification/Dockerfile` (`runpod/base:0.4.0-cuda11.8.0`,
+  GPU/CUDA). Check the actual RunPod dashboard / endpoint config for which image the
+  `RUNPOD_ENDPOINT_ID` env var (read by `core/utils.py`'s `endpoint_inference()`, called from
+  `embed_new_chip()`) actually points at before any hardening work on either — and worth moving the confirmed-live one out of
+  gitignored `tmp/` into a tracked location regardless, since a live prod image's source living
+  only in scratch space is itself a gap. **If the live worker's inference actually routes
+  through TF Serving rather than loading TensorFlow directly in the `python:3.12` image, this
+  item and the `dhi.io/tensorflow-serving:2` swap above may be the same piece of work — check
+  before doing both.**
+- **DHI base migration, conditional on the above**: if the CPU-only `python:3.12` worker is
+  live, same pattern as the `tensorflow-serving:2` swap — select a `dhi.io/python:3.12.x` tag,
+  run it through a real CVE check (Scout + Trivy at minimum) before switching, don't assume
+  "DHI = automatically fine." If the CUDA worker is live, DHI likely has no CUDA-capable Python
+  base (needs checking) — the realistic path may be a distroless/minimal final stage layered on
+  top of the CUDA runtime rather than a full base swap, since the CUDA driver/toolkit stack
+  itself isn't something DHI is likely to cover. Cross-reference
+  [`docs/tf1-to-tf2-migration-plan.md`](tf1-to-tf2-migration-plan.md), which already proposes
+  `dhi.io/tensorflow-serving:2` (124MB) for the TF-serving side with a scan already done (Scout
+  0C/0H, Trivy 0C/0H, Grype 3 libc6 CVEs triaged not-reachable) and a draft patch — check that
+  plan before duplicating the base-swap work here.
+- **subprocess/exec-capability audit**: can spawning subprocesses be blocked for the live worker?
+  Literally removing the `subprocess` stdlib module isn't feasible (breaks `multiprocessing`,
+  `asyncio` internals, and an unknown tail of dependencies that call it defensively). Real path:
+  (1) static grep of `handler.py` + all installed deps for `subprocess`/`os.system`/`os.exec*`
+  (GPU-driver-detection code — e.g. shelling out to `nvidia-smi` — is worth explicit suspicion,
+  same as any ML-stack dependency); (2) dynamic verification via `strace -f -e
+  trace=execve,fork,clone` (or seccomp audit mode) during a real inference request, to see what
+  actually fires vs. what static grep merely finds; (3) if clean, enforce with a seccomp profile
+  (`docker run --security-opt seccomp=<profile.json>`) denying `execve`/`fork`/`vfork`/relevant
+  `clone` flags — testable, reversible, blocks the syscall regardless of API used — noting
+  RunPod's serverless runtime may constrain how much control exists over container launch flags
+  compared to a self-managed deploy, worth checking what RunPod actually exposes before
+  committing to this as the enforcement mechanism; (4) cheaper complementary check — does the
+  chosen base image ship a shell (`docker run --rm --entrypoint /bin/sh <image> -c true`)? GPU/
+  CUDA bases may not strip shells the way CPU-only DHI images often do, so this may matter more
+  here than elsewhere. If GPU-driver-detection code turns out to genuinely need exec, that's a
+  real finding — the hardening decision becomes a judgment call on scoping a narrow seccomp
+  allow-list, not something to force through.
+
 ## Related but out of scope for both tracks above
 
 - `docs/changes/*.md` — individual completed-CR docs (what changed, why,
