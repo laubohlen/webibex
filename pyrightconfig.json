@@ -1,0 +1,17 @@
+{
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv",
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "node",
+    "static",
+    "staticfiles",
+    "media",
+    "tmp",
+    "training",
+    "**/migrations"
+  ]
+}

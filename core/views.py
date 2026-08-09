@@ -98,6 +98,7 @@ def animals_overview(request):
     return render(request, "core/animal_overview.html", context)
 
 
+@login_required
 def save_landmarks_view(request):
     if request.method == "POST":
 
@@ -161,6 +162,7 @@ def save_landmarks_view(request):
         pass
 
 
+@login_required
 def results_over_view(request):
     # images that have an animal associated
     identified_images = IbexImage.objects.filter(animal_id__isnull=False)
@@ -171,6 +173,7 @@ def results_over_view(request):
     )
 
 import time
+@login_required
 def default_chip_compare_view(request, oid):
     """
     Compare query against all images of the user with a range of [-2, +2 years]
@@ -264,6 +267,7 @@ def default_chip_compare_view(request, oid):
     )
 
 
+@login_required
 def project_chip_compare_view(request, oid):
     if request.POST.get("toggle") != "false":
         return geographic_chip_compare_view(request, oid)
@@ -347,6 +351,7 @@ def project_chip_compare_view(request, oid):
     )
 
 
+@login_required
 def geographic_chip_compare_view(request, oid):
     known_animals = Animal.objects.all()
     region_id = int(request.POST.get("region"))
@@ -437,6 +442,7 @@ def geographic_chip_compare_view(request, oid):
     )
 
 
+@login_required
 def rerun_view(request, oid):
     """TODO: figure out way to best show the comparison that was shown
     during the identification. Maybe just store ID's of images that where shown
