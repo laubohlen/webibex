@@ -28,10 +28,28 @@ a schedule.
 Required environment variables (secrets are NEVER accepted on argv):
     RAILWAY_API_TOKEN      Railway account or project API token, used to
                             fetch the source DATABASE_URL via Railway's
-                            GraphQL API. Never printed or logged.
+                            GraphQL API. Never printed or logged. Not
+                            required when SOURCE_DSN (below) is set.
     DB_DUMP_PASSPHRASE     Passphrase used to encrypt/decrypt the pg_dump
                             artifact (openssl -aes-256-cbc -pbkdf2
                             -iter 600000 -salt). Never printed or logged.
+
+Optional environment variable:
+    SOURCE_DSN             Bypasses the Railway GraphQL fetch and dumps
+                            straight from this DSN instead -- for local
+                            dry-runs against a throwaway/migrated database
+                            when Railway isn't reachable. An env var, not
+                            a CLI flag, consistent with "secrets are NEVER
+                            accepted on argv" above (a DSN can carry a
+                            password). --project-id/--environment-id/
+                            --token-kind become unnecessary in this mode.
+                            Every other guard (preflight_source,
+                            collect_expected, the loopback-only restore-
+                            target check) still runs normally against
+                            whatever DSN is given -- this only bypasses
+                            the credential *source*, not any safety
+                            check. Never point this at production outside
+                            the intended Railway-fetch path.
 
 Example invocation:
     RAILWAY_API_TOKEN=... DB_DUMP_PASSPHRASE=... \\
@@ -39,6 +57,10 @@ Example invocation:
             --project-id <railway-project-id> \\
             --environment-id <railway-environment-id> \\
             --token-kind account
+
+Local dry-run without Railway:
+    SOURCE_DSN=postgresql://user:pw@localhost:5432/webibex_dryrun \\
+        DB_DUMP_PASSPHRASE=... scripts/db_restore_drill.py
 
 To manually decrypt the resulting artifact later (e.g. to inspect it, or
 to hand it to someone else for a manual restore):
@@ -107,7 +129,8 @@ _RAILWAY_GRAPHQL_QUERY = (
 
 _PROD_MAJOR_VERSION_RE = re.compile(r"^\d+$")
 
-_REQUIRED_ENV_VARS: tuple[str, ...] = ("RAILWAY_API_TOKEN", "DB_DUMP_PASSPHRASE")
+_REQUIRED_ENV_VARS: tuple[str, ...] = ("DB_DUMP_PASSPHRASE",)  # RAILWAY_API_TOKEN
+# is added conditionally in main() -- unnecessary for a SOURCE_DSN dry-run.
 
 
 # ---------------------------------------------------------------------------
@@ -790,17 +813,33 @@ def _check_required_env_vars(names: tuple[str, ...]) -> list[str]:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n", 1)[0])
-    parser.add_argument("--project-id", required=True)
-    parser.add_argument("--environment-id", required=True)
+    parser.add_argument("--project-id")
+    parser.add_argument("--environment-id")
     parser.add_argument("--service-id", default=None)
-    parser.add_argument("--token-kind", choices=("account", "project"), required=True)
+    parser.add_argument("--token-kind", choices=("account", "project"))
     parser.add_argument("--variable-name", default="DATABASE_URL")
     parser.add_argument("--endpoint", default="backboard.railway.com")
     parser.add_argument("--spot-id-code", default=None)
     parser.add_argument(
         "--out-path", type=Path, default=Path("webibex_restore_drill.dump.enc")
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not os.environ.get("SOURCE_DSN", "").strip():
+        missing = [
+            name
+            for name, value in (
+                ("--project-id", args.project_id),
+                ("--environment-id", args.environment_id),
+                ("--token-kind", args.token_kind),
+            )
+            if value is None
+        ]
+        if missing:
+            parser.error(
+                "the following arguments are required unless the SOURCE_DSN "
+                f"env var is set: {', '.join(missing)}"
+            )
+    return args
 
 
 def _emit(message: str, *, err: bool = False) -> None:
@@ -833,7 +872,14 @@ def _print_report(expected: ExpectedState, result: VerifyResult) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
-    missing = _check_required_env_vars(_REQUIRED_ENV_VARS)
+    source_dsn_override = os.environ.get("SOURCE_DSN", "").strip() or None
+    # RAILWAY_API_TOKEN is only needed when actually calling Railway's API;
+    # a SOURCE_DSN dry-run needs no Railway account/token at all.
+    required_env_vars = _REQUIRED_ENV_VARS
+    if source_dsn_override is None:
+        required_env_vars = (*required_env_vars, "RAILWAY_API_TOKEN")
+
+    missing = _check_required_env_vars(required_env_vars)
     if missing:
         _emit(
             "refusing to run: required env var(s) not set or empty: "
@@ -843,14 +889,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        source_dsn = fetch_database_url(
-            args.project_id,
-            args.environment_id,
-            args.service_id,
-            token_kind=args.token_kind,
-            variable_name=args.variable_name,
-            endpoint=args.endpoint,
-        )
+        if source_dsn_override is not None:
+            source_dsn = source_dsn_override
+        else:
+            source_dsn = fetch_database_url(
+                args.project_id,
+                args.environment_id,
+                args.service_id,
+                token_kind=args.token_kind,
+                variable_name=args.variable_name,
+                endpoint=args.endpoint,
+            )
         info = preflight_source(source_dsn)
 
         conn = _connect_readonly(source_dsn)

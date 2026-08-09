@@ -214,6 +214,80 @@ def test_main_no_credential_appears_in_stdout_stderr_with_sentinel_passwords(
 
 
 # ---------------------------------------------------------------------------
+# SOURCE_DSN env var: local dry-run bypass of the Railway GraphQL fetch.
+# An env var, not a CLI flag -- a DSN can carry a password, and this
+# script's own invariant is "secrets are NEVER accepted on argv".
+# ---------------------------------------------------------------------------
+def test_parse_args_requires_railway_args_unless_source_dsn_env_set(monkeypatch):
+    monkeypatch.delenv("SOURCE_DSN", raising=False)
+    with pytest.raises(SystemExit):
+        mod.parse_args(["--token-kind", "account"])  # missing project/environment id
+
+
+def test_parse_args_source_dsn_env_makes_railway_args_optional(monkeypatch):
+    monkeypatch.setenv("SOURCE_DSN", "postgresql://u:p@localhost/fake")
+
+    args = mod.parse_args([])
+
+    assert args.project_id is None
+    assert args.environment_id is None
+    assert args.token_kind is None
+
+
+def test_parse_args_full_railway_args_still_work_without_source_dsn(monkeypatch):
+    monkeypatch.delenv("SOURCE_DSN", raising=False)
+
+    args = mod.parse_args(_ARGV)
+
+    assert args.project_id == "proj-1"
+    assert args.environment_id == "env-1"
+    assert args.token_kind == "account"
+
+
+def test_main_source_dsn_env_bypasses_railway_fetch_and_token_requirement(
+    monkeypatch, capsys
+):
+    # No RAILWAY_API_TOKEN at all -- SOURCE_DSN dry-run needs no Railway
+    # account/token whatsoever.
+    monkeypatch.delenv("RAILWAY_API_TOKEN", raising=False)
+    monkeypatch.setenv("DB_DUMP_PASSPHRASE", "pw")
+    fake_dsn = "postgresql://u:p@localhost/fake"
+    monkeypatch.setenv("SOURCE_DSN", fake_dsn)
+
+    fetch_mock = mock.Mock()
+    monkeypatch.setattr(mod, "fetch_database_url", fetch_mock)
+    preflight_mock = mock.Mock(
+        return_value=ServerInfo(
+            server_major_version=16, tables_present=mod.EXPECTED_TABLES
+        )
+    )
+    monkeypatch.setattr(mod, "preflight_source", preflight_mock)
+    monkeypatch.setattr(mod, "_connect_readonly", mock.Mock(return_value=mock.Mock()))
+    expected = ExpectedState(counts={"core_animal": 1}, spot_row=("PNGP24_001",))
+    monkeypatch.setattr(mod, "collect_expected", mock.Mock(return_value=expected))
+    monkeypatch.setattr(mod, "dump_encrypted", mock.Mock())
+    monkeypatch.setattr(
+        mod, "restore_and_verify", mock.Mock(return_value=_passing_verify_result())
+    )
+
+    exit_code = mod.main([])
+
+    assert exit_code == 0
+    fetch_mock.assert_not_called()
+    preflight_mock.assert_called_once_with(fake_dsn)
+
+
+def test_main_source_dsn_never_appears_in_argv_or_env_shape(monkeypatch):
+    """Regression guard for the design invariant: SOURCE_DSN is read from
+    os.environ only, never accepted as a CLI argument."""
+    import inspect
+
+    source = inspect.getsource(mod.parse_args)
+    assert "source-dsn" not in source
+    assert "source_dsn" not in source
+
+
+# ---------------------------------------------------------------------------
 # T50 -- binary-path posture: shutil.which resolution, scoped ruff suppression
 # ---------------------------------------------------------------------------
 def test_binary_resolution_uses_shutil_which_not_hardcoded_paths():
