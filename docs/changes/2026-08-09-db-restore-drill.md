@@ -49,12 +49,16 @@
   `libpq_env(dsn)` before connecting; 2 new tests + 1 extended assertion
   lock this in.
 
-**Follow-up action:** none required to land locally — 3 commits sit on
-branch `db-restore-drill` (off `main`), not yet pushed. User has a private
-GitLab mirror (`origin_gitlab` remote) and intends to push themselves. The
-actual GATE-evidence run (real Railway fetch + real Docker + real
-`pg_dump`/`pg_restore`) still needs to happen on the user's own machine —
-see Trigger below.
+**Follow-up action:** none required to land locally — 4 commits sit on
+branch `db-restore-drill` (off `main`), not yet pushed (was 3 as of
+2026-08-09; `8768922` on 2026-08-11 added the docker-run wiring, the
+entrypoint-dispatch fix, and the real GATE-evidence run's doc record, all
+consolidated into one commit — see the addenda below). User has a
+private GitLab mirror (`origin_gitlab` remote) and intends to push
+themselves. The actual GATE-evidence run (real Railway fetch + real
+Docker + real `pg_dump`/`pg_restore`) has now happened and **passed** —
+see the "real GATE-evidence run, PASS" addendum below; this paragraph's
+original "still needs to happen" is superseded.
 
 **Do NOT:**
 - Treat this as resuming the separately-paused `backup_db` → B2
@@ -101,7 +105,9 @@ needs Docker (per the 2026-08-10 addendum's `docker run` wrapper, not a
 native `postgresql-client` install) + the real `RAILWAY_API_TOKEN`/project/
 environment IDs.
 
-**Why:** the GATE (`docs/security-remediation-plan.md` ~line 1015) blocks
+**Why:** the GATE (`docs/security-remediation-plan.md`'s "GATE — restore
+drill required before the id_code max_length migration ships" section)
+blocks
 the `Animal.id_code` `max_length` schema migration from shipping until a
 backup mechanism has been proven to actually *restore*, not just run and
 upload successfully — "a backup that writes a file but has never been
@@ -122,8 +128,9 @@ this diff. `/insecure-defaults`: 0 findings. `/security-review`: 1 confirmed
 MEDIUM finding (TLS downgrade, above), fixed and re-verified green, no
 others. `/request-adherence --impl`: PASS, 5/5 requirements COVERED.
 
-**Known flaky test (found 2026-08-10, not yet fixed):**
-`test_db_restore_drill_property_password_never_survives` in
+**Known flaky test (found 2026-08-10, FIXED 2026-08-11 — see the
+"Addendum (2026-08-11): docker-run wiring implemented" section below):**
+`test_redact_dsn_property_password_never_survives` in
 `tests/scripts/test_db_restore_drill_dsn.py` filters generated passwords
 against `_DSN_STATIC_TOKENS` by exact match only, but the leak-check
 assertion is a substring check against the full redacted DSN. A password
@@ -226,11 +233,13 @@ None` alone is `False` in this sandbox, since the `docker` binary IS
 installed even though the daemon isn't reachable; the gate now actually
 probes `docker version`).
 
-Also fixed as part of this session (separate commit, before the docker-run
-work): the flaky `test_redact_dsn_property_password_never_survives` noted
-below (R9) — root cause was exact-membership skip-list vs. substring
-leak-check, not a redaction bug. `derandomize=True` added so the fix is
-deterministic, not seed-lucky.
+Also fixed as part of this session: the flaky
+`test_redact_dsn_property_password_never_survives` noted above (R9) —
+root cause was exact-membership skip-list vs. substring leak-check, not
+a redaction bug. `derandomize=True` added so the fix is deterministic,
+not seed-lucky. (Originally staged as its own logical commit, separate
+from the docker-run work — see the "Commit-split conflict" deviation
+below for why that boundary didn't survive to the actual `git commit`.)
 
 **Verify (2026-08-11):** `uv run pytest tests/scripts/ -v` → 223 passed,
 3 skipped (up from 112 collected / 109 passed + 3 skipped at the prior
@@ -250,15 +259,24 @@ untouched.
 
 **Deviations from this session's plan, flagged explicitly:**
 - **Commit-split conflict, resolved in favor of the explicit two-commit
-  breakdown.** The plan's decision-3c text said the `_PROD_MAJOR_VERSION_RE`
-  regex fix should land "in the same commit as the new `_IMAGE_REF_RE`/
-  `_CONTAINER_ID_RE` guards" (i.e. the docker-wiring commit), but the plan's
-  own "Explicitly out of scope" section separately enumerated commit 1 as
+  breakdown at implementation time — later superseded.** The plan's
+  decision-3c text said the `_PROD_MAJOR_VERSION_RE` regex fix should
+  land "in the same commit as the new `_IMAGE_REF_RE`/`_CONTAINER_ID_RE`
+  guards" (i.e. the docker-wiring commit), but the plan's own
+  "Explicitly out of scope" section separately enumerated commit 1 as
   "R9 flaky-test fix + the `_PROD_MAJOR_VERSION_RE` regex-safety fix" —
-  directly contradicting the first instruction. Resolved in favor of the
-  explicit two-commit breakdown (more authoritative — phrased as the final
-  commit-boundary directive) — `_PROD_MAJOR_VERSION_RE` landed in commit 1
-  with R9, not commit 2 with the new regexes.
+  directly contradicting the first instruction. Resolved at
+  implementation time in favor of the explicit two-commit breakdown
+  (more authoritative — phrased as the final commit-boundary directive)
+  — `_PROD_MAJOR_VERSION_RE` was staged with R9, not with the new
+  regexes. **Superseded by the actual commit**: by the time the branch
+  was committed, the entrypoint-dispatch fix (below) had extended the
+  same staged snapshot rather than splitting further, and the final
+  `git commit` (`8768922`) folded everything — R9, docker-run wiring,
+  and the entrypoint fix — into one consolidated commit. No commit
+  boundary from this plan actually survived to the real git history;
+  see the "Deferred to next session"/final addenda below for the actual
+  outcome.
 - **`fake_run` fixture did not pre-exist**, contrary to the plan's claim
   ("that fixture already exists and is currently unused, confirm/reuse
   it"). Only the underlying `FakeCompletedProcess` duck-type class existed
@@ -502,10 +520,14 @@ snapshot directly: `git add`'d the 5 touched files
 `tests/scripts/test_db_restore_drill_dump.py`,
 `tests/scripts/test_db_restore_drill_restore.py`) into the same staged
 state as the rest of the docker-run-wiring change, rather than treating
-it as a second logical commit. Not committed -- per this project's
-established pattern this session, the user reviews and commits
-personally; a draft commit message was written to
-`tmp/db_restore_drill_entrypoint_fix_commit_msg.txt` (gitignored).
+it as a second logical commit. Not committed at the time this paragraph
+was written -- per this project's established pattern this session, the
+user reviews and commits personally; a draft commit message was written
+to `tmp/db_restore_drill_entrypoint_fix_commit_msg.txt` (gitignored).
+**Update:** committed later the same session as part of `8768922` (see
+the final addendum below) -- this staged snapshot, R9/regex fix, and the
+real GATE-evidence run's doc updates all landed in that one consolidated
+commit.
 
 **Addendum (2026-08-11 ter): real GATE-evidence run, PASS.**
 
@@ -555,9 +577,10 @@ scoped or deployed; that's a separate future step.
 
 **Still pending:** none for this CR's original scope. Remaining follow-ups
 are tracked as separate TODOs in `docs/security-remediation-plan.md`:
-containerizing the drill tool itself, hash-pinning `requirements.txt`,
-the `testcontainers.postgres` deprecation, prod Postgres 16→17.9 upgrade,
-and stage-level progress logging.
+containerizing the drill tool itself, hash-pinning
+`requirements.txt`/`requirements-dev.txt`, the `testcontainers.postgres`
+deprecation, prod Postgres 16→17.9 upgrade, stage-level progress
+logging, and the e2e test against a railway-like app container.
 
 **Deferred to next session (2026-08-11, user decision):**
 - Run `/post-production` on this CR's diff — skipped this session given
@@ -570,3 +593,36 @@ and stage-level progress logging.
   `scripts/run_railway_token_smoke_test.sh`) so they become committable
   — both are non-secret operator convenience wrappers (Keychain *service
   names* only, never secret values) proven working this session.
+
+**Lessons learned (2026-08-11), kept here rather than only in host-side
+session memory so they survive a container reboot:**
+
+- **Mocked full-argv-equality tests prove internal consistency, not
+  real-world correctness.** The docker-run wiring shipped with 223+
+  passing tests (exact argv assertions, Hypothesis properties,
+  counter-input pins) and still hit a real bug on the first live run —
+  no mock could have caught `dhi.io/postgres:16-alpine-dev`'s entrypoint
+  behaving differently than assumed, because the mock's job is "did we
+  build the argv we intended," not "does the real image interpret it
+  the way we assumed." Compounded by `_pg_dump_major_version` — the
+  exact function that failed — having zero direct test coverage before
+  the fix (every existing test only monkeypatched it away). Takeaway
+  for subprocess/docker-wrapper code specifically: treat "tests pass"
+  and "verified against the real target" as two distinct completion
+  gates, not one.
+- **Wrapper scripts for this repo must call `uv run python3`, never
+  bare `python3`.** `tmp/run_db_restore_drill.sh` first called bare
+  `python3`, which hit the host's *system* Python (no `psycopg2`
+  installed there) instead of the project's `uv`-managed `.venv` —
+  `ModuleNotFoundError`, even though `uv pip install -r requirements.txt
+  -r requirements-dev.txt` had already succeeded. This repo has no
+  `pyproject.toml` (deliberately, see the 2026-08-09 entry above), so
+  `uv run python3 <script>` is the correct invocation to resolve
+  against the real venv.
+- **`code-analyst` isn't a registered `Agent` subagent_type in this
+  harness** — only a skill. `Agent(subagent_type: "code-analyst")`
+  fails outright; the working path is `Skill(skill: "code-analyst",
+  args: "--model opus ...")` to load its procedure, then manually
+  spawning `Agent(subagent_type: "general-purpose", model: "opus")`
+  with a prompt that has the agent follow that procedure itself. Hit
+  twice this session (once per planning-TDD pipeline round).

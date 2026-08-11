@@ -1444,6 +1444,18 @@ that stay within `max_length=10` (e.g. per-prefix counters, or simply erroring
 past 999 instead of colliding) would sidestep the migration/GATE entirely — worth
 weighing against a genuine widen when this is scoped.
 
+**Update (2026-08-11): the above is now stale — the GATE is satisfied**, see
+"GATE — restore drill required before the id_code max_length migration ships"
+above. This paragraph conflated two separate things: the professor's "revisit
+when opening to other users" answer was about the *recurring automated* B2
+backup specifically, not about the restore-drill precondition itself — the
+GATE's own checklist always allowed a one-off manual mechanism (see its
+"If she picks DIY B2 script" vs the general checklist wording), and that's
+exactly what `scripts/db_restore_drill.py` turned out to be. Deploying an
+`id_code` `max_length` widen to production is therefore **no longer blocked**
+by this GATE — it's still a separate, not-yet-scoped step, but the blocker
+described in the paragraph above has been resolved.
+
 ## TODO — dead code and missing guards in `process_horn_chip` (found 2026-07-30)
 
 Surfaced by code-analyst while writing the `core/utils.py` coverage CR's test spec.
@@ -1549,6 +1561,50 @@ code implications either way, purely a label. Professor is still thinking about 
 
 - Trigger: professor confirms a preferred name, or this comes up again during a
   dedicated UX/naming pass.
+
+## TODO — hash-pin `requirements.txt`/`requirements-dev.txt` (raised 2026-08-11)
+
+Exact-version pins (`requests==2.33.0`, etc.) already give real protection —
+PyPI enforces per-file immutability once a version's artifact is published,
+so a plain reinstall of an exact pin should always fetch the same bytes.
+What's missing: cryptographic hash verification, which defends against an
+index-level/account compromise swapping the artifact behind the same version
+string, resolving from a different/malicious mirror by accident, or any
+tampering between resolve and download that TLS alone doesn't catch.
+
+Doesn't need `pyproject.toml`/`uv.lock` (deliberately avoided in this repo —
+see the 2026-08-09 CR doc, a bare `pyproject.toml` was tested and found to
+make `uv run` silently shadow-`.venv` the existing `requirements.txt`-based
+setup). Hash-pinning works directly on plain `requirements.txt` files:
+```bash
+uv pip compile --generate-hashes requirements.txt -o requirements.lock.txt
+uv pip install --require-hashes -r requirements.lock.txt --only-binary=:all:
+```
+`--only-binary=:all:` (already used this session for the `testcontainers`
+install) additionally blocks sdist installs from running arbitrary
+`setup.py` code at install time.
+
+**Scope note**: this would apply to the *whole* `requirements.txt`/
+`requirements-dev.txt` (the entire Django app's deps), not just the
+db-restore-drill tooling — a bigger, more consequential change than
+anything else tracked here. There's also a purpose-built `/supply-chain`
+skill for doing this properly (lockfile integrity, typosquatting, yanked
+versions, CVE scan) rather than hand-rolling it piecemeal.
+
+**Railway/Nixpacks wrinkle**: this repo has no `Dockerfile`/`nixpacks.toml`/
+`railway.json` — Railway builds via default Nixpacks auto-detection, which
+runs its own install command under the hood. Hash-pinning locally doesn't
+automatically make Railway's build enforce it too; that needs an explicit
+`nixpacks.toml` `[phases.install]` override pointing at the hash-pinned
+file (or a full custom `Dockerfile`). Exact current Nixpacks override
+syntax not verified against live docs — check before relying on it. Also:
+whichever way this goes, local dev and Railway need to install from the
+*same* hash-pinned file, or the exact drift risk this TODO exists to close
+gets reintroduced.
+
+- Trigger: next dedicated dependency-hygiene pass, or run `/supply-chain`
+  for a full audit — decide local-only vs. local+Railway-enforced scope
+  first, since the two have very different implementation costs.
 
 ## TODO — migrate `testcontainers.postgres` → `testcontainers.community.postgres` (found 2026-08-10)
 
