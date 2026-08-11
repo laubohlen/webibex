@@ -28,10 +28,13 @@ dedicated B2 test bucket before it can start. The moto tier confirms
 unblock this itself (moto simulates S3, not Backblaze B2's actual
 behavior) — see `security-remediation-plan.md`'s landmine section.
 
-**Open / deferred**: CI scaffold, region-detail cross-owner exposure
-decision, IDOR fix (`location-id`/`oid` ownership checks), ruff baseline
-config, logging/observability pass, documentation gaps, `allauth.mfa`
-evaluation, "Delete" tool implementation decision.
+**Open / deferred**: CI scaffold, region-detail coordinate-exposure UX
+question (still open; shared visibility itself confirmed intentional by the
+professor 2026-08-08), IDOR fix — `location-id`/`oid` ownership checks, now
+unblocked with confirmed owner-only semantics, ready to implement — ruff
+baseline config, logging/observability pass, documentation gaps,
+`allauth.mfa` evaluation. "Delete" tool: confirmed by the professor
+(2026-08-08) to stay hidden, no real-implementation work needed now.
 
 ## Track: TF1 → TF2 Migration (`triplet-reid` pipeline)
 

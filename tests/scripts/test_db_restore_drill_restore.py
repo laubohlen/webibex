@@ -41,13 +41,21 @@ def test_importing_module_succeeds_without_testcontainers_installed():
 def test_restore_and_verify_without_testcontainers_gives_actionable_message(
     monkeypatch,
 ):
-    # testcontainers genuinely isn't installed in this sandbox.
-    monkeypatch.delitem(sys.modules, "testcontainers.postgres", raising=False)
-    monkeypatch.delitem(sys.modules, "testcontainers", raising=False)
+    # `testcontainers` the Python package IS installed in this sandbox's
+    # venv now (confirmed) -- a real-absence test would silently stop
+    # testing this branch. Force the ImportError path deterministically:
+    # setting a sys.modules entry to None makes Python's import system
+    # raise ImportError immediately for that module, regardless of
+    # whether it's actually installed.
+    monkeypatch.setitem(sys.modules, "testcontainers.postgres", None)
+    monkeypatch.setitem(sys.modules, "testcontainers", None)
 
     expected = ExpectedState(counts={"core_animal": 1}, spot_row=("a", "b"))
     with pytest.raises(RuntimeError, match="testcontainers"):
         restore_and_verify(Path("dump.enc"), expected, 16)
+
+
+_FAKE_CONTAINER_ID = "b" * 40
 
 
 @pytest.fixture
@@ -62,6 +70,7 @@ def fake_testcontainers_module(monkeypatch):
     container_instance.get_connection_url.return_value = (
         "postgresql://test:test@127.0.0.1:55432/test"
     )
+    container_instance.get_wrapped_container.return_value.id = _FAKE_CONTAINER_ID
     container_instance.__enter__ = mock.Mock(return_value=container_instance)
     container_instance.__exit__ = mock.Mock(return_value=False)
 
@@ -75,7 +84,16 @@ def fake_testcontainers_module(monkeypatch):
 
 @pytest.mark.parametrize(
     "bad_version",
-    ["16-alpine; rm -rf /", "latest", "", "16.2"],
+    [
+        "16-alpine; rm -rf /",
+        "latest",
+        "",
+        "16.2",
+        "16\n",  # `$` in the old `^\d+$` pattern matches before a trailing
+        # newline -- `.match()` accepted this. Must be rejected now.
+        "１６",  # noqa: RUF001 -- fullwidth digits (intentional confusable): `\d` is Unicode-aware and accepted
+        # these under the old pattern. Must be rejected now (ASCII-only).
+    ],
 )
 def test_restore_and_verify_rejects_unsafe_prod_major_version(
     monkeypatch, fake_testcontainers_module, bad_version
@@ -103,6 +121,15 @@ def test_restore_and_verify_calls_assert_local_target_before_any_popen(
         lambda *a, **k: popen_calls.append((a, k)) or mock.Mock(),
     )
 
+    restore_target_env_calls = []
+    original_restore_target_env = mod._restore_target_env
+
+    def spy_restore_target_env(dsn):
+        restore_target_env_calls.append(dsn)
+        return original_restore_target_env(dsn)
+
+    monkeypatch.setattr(mod, "_restore_target_env", spy_restore_target_env)
+
     def raising_guard(dsn, source_dsn=None):
         raise ValueError("guard tripped -- not a loopback target")
 
@@ -113,6 +140,150 @@ def test_restore_and_verify_calls_assert_local_target_before_any_popen(
         restore_and_verify(Path("dump.enc"), expected, 16)
 
     assert popen_calls == []
+    # _restore_target_env (and, transitively, the container-id read) must
+    # never run when the loopback-target guard has already tripped --
+    # otherwise the guard would be validating a value manufactured AFTER
+    # it already ran, making it vacuous.
+    assert restore_target_env_calls == []
+
+
+def test_restore_and_verify_happy_path_restore_leg_argv_env_and_verification_dsn(
+    monkeypatch,
+    fake_testcontainers_module,
+    fake_popen_cls,
+    fake_connection_cls,
+    fake_cursor_cls,
+    docker_env,
+):
+    monkeypatch.setenv("DB_DUMP_PASSPHRASE", "pw")
+    monkeypatch.setattr(
+        mod.shutil,
+        "which",
+        lambda name: {"docker": "/usr/bin/docker", "openssl": "/usr/bin/openssl"}.get(
+            name
+        ),
+    )
+    monkeypatch.setattr(mod.subprocess, "Popen", fake_popen_cls)
+
+    spot_row = ("PNGP24_001", "Bob", True, "2024-01-01", "24AB", "M")
+    cursor = fake_cursor_cls(
+        fetchone_results=[(i,) for i in range(1, 7)] + [spot_row],
+    )
+    conn = fake_connection_cls(cursor)
+    connect_calls = []
+
+    def fake_connect(*args, **kwargs):
+        connect_calls.append(args)
+        return conn
+
+    monkeypatch.setattr(mod.psycopg2, "connect", fake_connect)
+
+    expected = ExpectedState(counts={"core_animal": 1}, spot_row=spot_row)
+
+    restore_and_verify(Path("dump.enc"), expected, 16)
+
+    p1, p2 = fake_popen_cls.instances  # p1 = openssl (host), p2 = docker pg_restore
+    assert p1.argv[0] == "/usr/bin/openssl"
+    assert p2.argv[0] == "/usr/bin/docker"
+
+    # Full-list equality (not membership) -- the `docker_env` fixture pins
+    # HOME/PATH/DOCKER_HOST and clears the other 5 allowlist members, so
+    # the -e name set is fully deterministic here: the 3 docker-context
+    # vars + the 6 PG* keys from the (rewritten) restore target env.
+    # `--entrypoint pg_restore` is the fix for the live entrypoint-
+    # dispatch bug; `--network container:<id>` (never `--network=none`,
+    # mutually exclusive with the container-namespace join this leg
+    # needs) reaches the ephemeral testcontainers Postgres; -t/--tty/-it
+    # are never emitted even though interactive=True.
+    assert p2.argv == [
+        "/usr/bin/docker",
+        "run",
+        "--rm",
+        "--pull=never",
+        "--security-opt",
+        "no-new-privileges",
+        "-i",
+        "--network",
+        f"container:{_FAKE_CONTAINER_ID}",
+        "-e",
+        "DOCKER_HOST",
+        "-e",
+        "HOME",
+        "-e",
+        "PATH",
+        "-e",
+        "PGDATABASE",
+        "-e",
+        "PGHOST",
+        "-e",
+        "PGPASSWORD",
+        "-e",
+        "PGPORT",
+        "-e",
+        "PGSSLMODE",
+        "-e",
+        "PGUSER",
+        "--entrypoint",
+        "pg_restore",
+        mod.DEFAULT_PG_CLIENT_IMAGE,
+        "--no-owner",
+        "--no-privileges",
+        "--exit-on-error",
+        "--single-transaction",
+        "-d",
+        "test",
+    ]
+    assert "--network=none" not in p2.argv
+    assert "-t" not in p2.argv
+    assert "--tty" not in p2.argv
+    assert "-it" not in p2.argv
+
+    # PGHOST/PGPORT/PGSSLMODE rewritten to the container-internal loopback
+    # -- never the fake published port (55432) from the fixture's DSN.
+    restore_docker_env = p2.kwargs["env"]
+    assert restore_docker_env["PGHOST"] == "127.0.0.1"
+    assert restore_docker_env["PGPORT"] == "5432"
+    assert restore_docker_env["PGSSLMODE"] == "disable"
+
+    # The post-restore verification psycopg2.connect() call must reuse
+    # the container's PUBLISHED DSN (127.0.0.1:55432 per the fixture),
+    # never the rewritten container-internal env -- reusing the internal
+    # env here would dial 127.0.0.1:5432 on the HOST, a real
+    # data-integrity hazard (could silently hit an unrelated local
+    # Postgres instance).
+    assert connect_calls == [("postgresql://test:test@127.0.0.1:55432/test",)]
+
+
+def test_restore_and_verify_invalid_container_id_raises_no_popen_and_clean_exit(
+    monkeypatch, fake_testcontainers_module
+):
+    monkeypatch.setenv("DB_DUMP_PASSPHRASE", "pw")
+    monkeypatch.setattr(
+        mod.shutil,
+        "which",
+        lambda name: {"docker": "/usr/bin/docker", "openssl": "/usr/bin/openssl"}.get(
+            name
+        ),
+    )
+
+    popen_calls = []
+    monkeypatch.setattr(
+        mod.subprocess,
+        "Popen",
+        lambda *a, **k: popen_calls.append((a, k)) or mock.Mock(),
+    )
+
+    _container_cls, container_instance = fake_testcontainers_module
+    container_instance.get_wrapped_container.return_value.id = "not-a-valid-id"
+
+    expected = ExpectedState(counts={"core_animal": 1}, spot_row=("a",))
+    with pytest.raises(RuntimeError):
+        restore_and_verify(Path("dump.enc"), expected, 16)
+
+    assert popen_calls == []
+    # the `with PostgresContainer(...) as container:` block must still
+    # exit cleanly -- no leaked container.
+    container_instance.__exit__.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

@@ -194,7 +194,9 @@ def test_main_no_credential_appears_in_stdout_stderr_with_sentinel_passwords(
     monkeypatch.setattr(mod, "collect_expected", mock.Mock(return_value=expected))
     monkeypatch.setattr(mod, "dump_encrypted", mock.Mock())
 
-    def fake_restore_and_verify(enc_path, exp, prod_major_version, source_dsn=None):
+    def fake_restore_and_verify(
+        enc_path, exp, prod_major_version, source_dsn=None, *, image=None
+    ):
         assert container_sentinel not in str(source_dsn)
         return _passing_verify_result()
 
@@ -274,7 +276,7 @@ def test_main_source_dsn_env_bypasses_railway_fetch_and_token_requirement(
 
     assert exit_code == 0
     fetch_mock.assert_not_called()
-    preflight_mock.assert_called_once_with(fake_dsn)
+    preflight_mock.assert_called_once_with(fake_dsn, image=mod.DEFAULT_PG_CLIENT_IMAGE)
 
 
 def test_main_source_dsn_never_appears_in_argv_or_env_shape(monkeypatch):
@@ -299,7 +301,130 @@ def test_binary_resolution_uses_shutil_which_not_hardcoded_paths():
     # pg_dump/pg_restore/openssl anywhere in the production code path.
     for hardcoded in ("/usr/bin/pg_dump", "/usr/bin/pg_restore", "/usr/bin/openssl"):
         assert hardcoded not in source
+    # pg_dump/pg_restore now run inside `docker run --rm` -- zero
+    # shutil.which("pg_dump")/("pg_restore") remains in the production
+    # path (only "docker" and "openssl" are still resolved via
+    # shutil.which).
+    assert 'shutil.which("pg_dump")' not in source
+    assert 'shutil.which("pg_restore")' not in source
 
 
 def test_shutil_which_is_real_shutil_module_reference():
     assert mod.shutil is shutil
+
+
+# ---------------------------------------------------------------------------
+# --pg-client-image: threaded identically into all 3 docker-aware
+# collaborators (preflight_source, dump_encrypted, restore_and_verify)
+# ---------------------------------------------------------------------------
+def test_parse_args_pg_client_image_default_is_module_default():
+    args = mod.parse_args(_ARGV)
+    assert args.pg_client_image == mod.DEFAULT_PG_CLIENT_IMAGE
+
+
+def test_parse_args_pg_client_image_custom_value_threads_verbatim():
+    args = mod.parse_args([*_ARGV, "--pg-client-image", "registry.example/pg:16"])
+    assert args.pg_client_image == "registry.example/pg:16"
+
+
+def _mock_all_collaborators_capture_image(monkeypatch):
+    """Same collaborator mocking as `_mock_all_collaborators`, but each
+    mock records the `image` kwarg it received.
+    """
+    received_images: dict[str, object] = {}
+    expected = ExpectedState(counts={"core_animal": 1}, spot_row=("PNGP24_001",))
+
+    monkeypatch.setattr(
+        mod,
+        "fetch_database_url",
+        mock.Mock(return_value="postgresql://x:y@localhost/db"),
+    )
+
+    def fake_preflight_source(dsn, *, image=None):
+        received_images["preflight_source"] = image
+        return ServerInfo(server_major_version=16, tables_present=mod.EXPECTED_TABLES)
+
+    monkeypatch.setattr(mod, "preflight_source", fake_preflight_source)
+    monkeypatch.setattr(mod, "_connect_readonly", mock.Mock(return_value=mock.Mock()))
+    monkeypatch.setattr(mod, "collect_expected", mock.Mock(return_value=expected))
+
+    def fake_dump_encrypted(dsn, out_path, *args, image=None, **kwargs):
+        received_images["dump_encrypted"] = image
+
+    monkeypatch.setattr(mod, "dump_encrypted", fake_dump_encrypted)
+
+    def fake_restore_and_verify(
+        enc_path, exp, prod_major_version, source_dsn=None, *, image=None
+    ):
+        received_images["restore_and_verify"] = image
+        return _passing_verify_result()
+
+    monkeypatch.setattr(mod, "restore_and_verify", fake_restore_and_verify)
+    return received_images
+
+
+def test_main_pg_client_image_default_threads_identically_into_all_collaborators(
+    monkeypatch,
+):
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
+    monkeypatch.setenv("DB_DUMP_PASSPHRASE", "pw")
+    received_images = _mock_all_collaborators_capture_image(monkeypatch)
+
+    exit_code = mod.main(_ARGV)
+
+    assert exit_code == 0
+    assert received_images == {
+        "preflight_source": mod.DEFAULT_PG_CLIENT_IMAGE,
+        "dump_encrypted": mod.DEFAULT_PG_CLIENT_IMAGE,
+        "restore_and_verify": mod.DEFAULT_PG_CLIENT_IMAGE,
+    }
+
+
+def test_main_pg_client_image_custom_value_threads_identically_into_all_collaborators(
+    monkeypatch,
+):
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
+    monkeypatch.setenv("DB_DUMP_PASSPHRASE", "pw")
+    received_images = _mock_all_collaborators_capture_image(monkeypatch)
+
+    custom_image = "registry.example.com:5000/ns/postgres:16"
+    exit_code = mod.main([*_ARGV, "--pg-client-image", custom_image])
+
+    assert exit_code == 0
+    assert received_images == {
+        "preflight_source": custom_image,
+        "dump_encrypted": custom_image,
+        "restore_and_verify": custom_image,
+    }
+
+
+def test_main_invalid_pg_client_image_nonzero_exit_no_artifact_no_credential_leak(
+    monkeypatch, capsys, tmp_path
+):
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
+    monkeypatch.setenv("DB_DUMP_PASSPHRASE", "pw")
+
+    source_sentinel = "SOURCE-SECRET-image-test"
+    monkeypatch.setattr(
+        mod,
+        "fetch_database_url",
+        mock.Mock(return_value=f"postgresql://user:{source_sentinel}@prod-host/db"),
+    )
+    # preflight_source is the real function -- it's the one that validates
+    # `image` via _docker_preflight's _IMAGE_REF_RE check.
+    monkeypatch.setattr(mod, "_docker_path", lambda: "/usr/bin/docker")
+
+    out_path = tmp_path / "dump.enc"
+    # A single argv token (no shell involved) containing an embedded
+    # space -- argparse assigns it whole to --pg-client-image, so this
+    # exercises _IMAGE_REF_RE rejection, not argparse's own tokenizing.
+    bad_image = "postgres:16 --privileged"
+    argv = [*_ARGV, "--pg-client-image", bad_image, "--out-path", str(out_path)]
+
+    exit_code = mod.main(argv)
+
+    assert exit_code != 0
+    assert not out_path.exists()
+    captured = capsys.readouterr()
+    assert source_sentinel not in captured.out
+    assert source_sentinel not in captured.err

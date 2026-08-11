@@ -1,29 +1,59 @@
 """P1/integration tier for scripts/db_restore_drill.py -- NOT implemented.
 
-These need Docker + real `pg_dump`/`pg_restore`/`openssl` binaries + a real
-Railway network round-trip, none of which are available in this sandbox
-(confirmed: no Docker, no postgresql-client on PATH, no network egress).
-Left as skip-gated stubs (mirroring the `live_b2` marker's precedent) so
-the user has a concrete, runnable target once unblocked -- not filled in
-speculatively per the code-analyst spec ("Do NOT write the P1/integration
-tests").
+These need a reachable Docker daemon (pg_dump/pg_restore now run inside
+`docker run --rm`, not as host binaries) + a real Railway network
+round-trip, none of which are available in this sandbox (confirmed: the
+`docker` binary IS installed here, but the daemon is unreachable -- no
+`/var/run/docker.sock`; no network egress). Left as skip-gated stubs
+(mirroring the `live_b2` marker's precedent) so the user has a concrete,
+runnable target once unblocked -- not filled in speculatively per the
+code-analyst spec ("Do NOT write the P1/integration tests").
 
-Run manually once postgresql-client + Docker + Railway credentials are
-available: `pytest tests/scripts/test_db_restore_drill_live_integration.py
+Run manually once Docker + Railway credentials are available:
+`pytest tests/scripts/test_db_restore_drill_live_integration.py
 -m live_pg_restore -v`
 """
 
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 import pytest
+
+
+def _docker_daemon_reachable() -> bool:
+    """Binary presence alone is NOT sufficient here: `docker` IS on PATH
+    in this sandbox, but the daemon is unreachable. A binary-presence-only
+    `shutil.which("docker") is None` check would therefore be False and
+    let this tier actually execute instead of skip. Gate on the daemon
+    actually responding instead -- a missing binary (FileNotFoundError)
+    also means "unreachable", not an error.
+    """
+    docker_path = shutil.which("docker")
+    if docker_path is None:
+        return False
+    try:
+        result = subprocess.run(  # noqa: S603 -- docker_path from shutil.which, fixed argv, shell=False
+            [docker_path, "version", "--format", "{{.Server.Version}}"],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, PermissionError, FileNotFoundError, OSError):
+        return False
+    return result.returncode == 0
+
 
 pytestmark = [
     pytest.mark.live_pg_restore,
     pytest.mark.skipif(
-        shutil.which("pg_restore") is None,
-        reason="pg_restore not on PATH -- install postgresql-client to run this tier",
+        not _docker_daemon_reachable(),
+        reason=(
+            "Docker daemon not reachable -- start Docker to run this tier "
+            "(pg_dump/pg_restore run inside `docker run --rm` now, not as "
+            "host binaries)"
+        ),
     ),
 ]
 
@@ -45,8 +75,9 @@ def test_dump_encrypted_real_openssl_round_trip():
     valid encrypted pg_dump (not just that the subprocess pipeline exited
     0 with mocked processes)."""
     pytest.skip(
-        "T40-I not implemented -- needs real pg_dump + openssl binaries and "
-        "a real local Postgres to dump from. See scripts/db_restore_drill.py:"
+        "T40-I not implemented -- needs a reachable Docker daemon (pg_dump "
+        "runs inside `docker run --rm` now), a real openssl binary, and a "
+        "real local Postgres to dump from. See scripts/db_restore_drill.py:"
         "dump_encrypted."
     )
 

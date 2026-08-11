@@ -461,6 +461,13 @@ delete.
   scoping a broader `core/views.py` coverage/cleanup pass (per the existing
   coverage-expansion TODO above — `core/views.py` is at 18% coverage).
 
+**Professor confirmed (2026-08-08 email reply)**: not needed for now — happy to
+leave it hidden (matches the already-committed `3d5168d` crash-guard/hide fix).
+If/when it is implemented: **hard delete** (not soft-delete/archive), with an
+explicit confirmation step before the destructive multi-select action. Still no
+decision on cascade scope (`IbexChip`/`Embedding`/stored file) — ask
+specifically when this is picked up, since it wasn't addressed directly.
+
 ## TODO — auth/session hardening settings missing (found 2026-07-24, RESOLVED 2026-07-25)
 
 Raised during a session discussion on login-system security (not a deep audit — a
@@ -654,6 +661,15 @@ touched.
   is acceptable as-is, or specifies which UX tradeoff they'd prefer; if the
   answer is "go private instead," re-scope to include `region_overview`.
 
+**Professor partially answered (2026-08-08 email reply)**: shared/cross-owner
+region *visibility* is confirmed intentional — her original design was for
+any user to browse and compare against other users' regions, while only
+being able to act on their own images (see the corresponding note on the
+IDOR TODO below). So "go private instead" is **not** the direction; the
+`region_overview`-consistency corollary above no longer applies. The
+coordinate-detail-exposure UX tradeoff itself (name-only in dropdown vs. full
+detail) is still open — she wants to discuss it further before deciding.
+
 ## TODO — IDOR: `location-id`/`oid` unauthenticated-relative in `save_image_location`/`create_loaction` (found 2026-07-24)
 
 Found by a Fable5 adversarial review run against the region-visibility fix CR
@@ -684,6 +700,26 @@ authenticated user, or only their owner/creator?).
 
 - Trigger: next full security-remediation batch, or before this app's user
   base or threat model changes from the current small trusted group.
+
+**Professor confirmed the blocking ownership semantics (2026-08-08 email reply)**:
+users should be able to browse/use regions created by other users (reduces
+cross-region comparison errors — an animal seen in Gran Paradiso is never the
+same individual as one seen in Austria), but should only be able to **act**
+(edit, delete) on their own images/locations. This matches `update_region`'s
+existing `region.owner != request.user` → `HttpResponseForbidden` pattern —
+that pattern is now the confirmed direction, not just an inferred precedent.
+Unblocks implementing owner-only checks in `save_image_location` and
+`create_loaction`. She also flagged wanting to talk through the deeper region
+design further, so treat this as directional confirmation for the ownership
+question specifically, not a sign-off on every region-related detail.
+
+Also found while re-reading this view for the above: `save_image_location`
+additionally does `get_object_or_404(Region, pk=region_id)` with no ownership
+check on `region_id` either — same bug class, not previously listed here.
+Given the confirmed "regions are shared/browsable" direction, this one may be
+intentional (any user can select any region for their own image) rather than
+a gap — worth a quick confirm, not necessarily a fix, when this TODO is
+picked up.
 
 ## TODO — behavioral gaps in auth-hardening test coverage (found 2026-07-25, RESOLVED 2026-07-25)
 
@@ -968,6 +1004,32 @@ production (that file only exists for local dev; production always uses
   (`ibex_stambecchi/tmp/draft-email-professor-open-questions.md`). Do not
   resume building the DIY script until she answers.
 
+**Professor answered (2026-08-08 email reply)**: no urgency — fine to keep
+waiting for now. When the app is actually opened to more users, re-assess how
+much dev work the DIY B2 script needs at that point; do it that way if there's
+still time/resources, otherwise she'll arrange payment for Railway Pro. Net
+effect: **decision is "revisit when opening to other users," not "pick now"**
+— do not resume building `backup_db` yet; re-open this question as part of
+the opening-to-other-users planning, not before.
+
+**Storage destination found (2026-08-11)**: the webibex project email
+(`wibex@ikmail.com`) has a dedicated Infomaniak kDrive (kSuite), 15GB free
+— a natural destination for encrypted DB backup artifacts (the interim
+manual backup plan's `.dump.enc` output, e.g.), better suited than raw
+email attachments for anything recurring (no size juggling, stays
+organized in one place). The actual kDrive URL isn't recorded in this
+doc — ask the user for the current link when needed. Used this session:
+the real GATE-evidence dump (`webibex_restore_drill.dump.enc`, produced
+by the live restore-drill run — see
+`docs/changes/2026-08-09-db-restore-drill.md`) was uploaded there as
+`webibex_restore_drill_20260811-1558.dump.enc.zip`, zipped purely to
+keep it as a standard file type for cloud storage convenience, not for
+compression (AES-256 ciphertext doesn't compress) or added security (the
+zip itself is not separately encrypted — no security benefit over the
+already-strong `.dump.enc` layer, so not worth the extra
+password-management friction). The decryption passphrase still travels
+out-of-band from wherever the file itself lands, per the original plan.
+
 ## GATE — restore drill required before the id_code max_length migration ships (added 2026-07-31, updated 2026-07-31)
 
 The current MVP-safety batch includes a schema migration (`Animal.id_code`
@@ -998,6 +1060,22 @@ Restore-drill checklist (applies either way):
 - Trigger: this gate is checked once, immediately before this batch's production
   deploy — not a recurring requirement, but every future backup-mechanism change
   should re-trigger a fresh restore drill before its next prod migration.
+
+**GATE SATISFIED (2026-08-11):** real live run of `scripts/db_restore_drill.py`
+(see `docs/changes/2026-08-09-db-restore-drill.md`) — real Railway GraphQL fetch,
+real `pg_dump` against prod (`DATABASE_PUBLIC_URL`, not the private
+`postgres.railway.internal` host), real `pg_restore` into a fresh ephemeral
+`testcontainers` Postgres, all via `docker run --rm --entrypoint <binary>`
+(the entrypoint-dispatch fix from this same session). Checklist items 1-3
+confirmed: row counts matched on all 6 tables (`core_animal`: 110,
+`core_region`: 3, `core_location`: 143, `core_ibeximage`: 143,
+`core_ibexchip`: 142, `core_embedding`: 142) plus the `Animal` spot-check —
+`=== overall: PASS ===`. Item 4 (the `id_code` `max_length` migration itself)
+is unblocked; migrating and deploying it is a separate, not-yet-scoped step.
+A handful of benign `WARNING: database "railway" has a collation version
+mismatch` lines appeared (client/server glibc collation version drift,
+non-fatal, stderr-only — never touches the piped binary dump stream) — noted
+here in case it recurs, not something that needs fixing to trust this result.
 
 ## TODO — image/chip backup is a separate question from the DB backup above (found 2026-07-31)
 
@@ -1343,6 +1421,29 @@ separate future change, not part of this CR.
   counters?) before implementing; touches the same function as the mutation-testing
   TODO above, could be combined with that gate.
 
+**Professor answered on scope, not on scheme (2026-08-08 email reply)**: from her
+side, 999/year is "molto più che sufficienti" for actual animal counts per prefix,
+and no decision is needed from her — she'll keep prefix usage under that cap
+herself. She's also still reconsidering what a "prefix" (`GP` etc.) should mean
+(currently more of a per-project label than a literal geographic region). **User
+override (2026-08-08, this session)**: the dev still considers >999 support worth
+doing if it's cheap, regardless of the professor's "not necessary" read — noted as
+a live priority, not dropped.
+
+**Scope split worth knowing before picking this up**: the prefix-scoping bug and
+the first-3-digit-run misparse are both plain logic fixes, no schema change (per
+the backward-compatible fix direction above). The `>999` rollover fix, if done via
+widening `id_code` past `max_length=10`, is the *same* migration already gated at
+"GATE — restore drill required before the id_code max_length migration ships"
+above — and that GATE is currently blocked: the professor's backup answer
+(2026-08-08, same email) was "revisit when opening to other users," not "proceed
+now," so the restore-drill precondition isn't going to be satisfied imminently.
+A `max_length` widen could ship now without conflict; deploying it to production
+would not, per the standing 2026-07-31 GATE decision. Reject/renumber schemes
+that stay within `max_length=10` (e.g. per-prefix counters, or simply erroring
+past 999 instead of colliding) would sidestep the migration/GATE entirely — worth
+weighing against a genuine widen when this is scoped.
+
 ## TODO — dead code and missing guards in `process_horn_chip` (found 2026-07-30)
 
 Surfaced by code-analyst while writing the `core/utils.py` coverage CR's test spec.
@@ -1437,3 +1538,134 @@ both asserts and the resulting 500-on-malformed-input behavior left in place.
   dedicated `BadRequest`-mapped exception), and decide the desired client-facing error
   contract (JSON error body vs. redirect) with the professor before implementing,
   since this function backs the landmarking UI's coordinate submission endpoint.
+
+## TODO — "animals" tab naming, undecided (raised 2026-08-08, professor undecided)
+
+Minor UX question raised while confirming other open items with the professor by
+email: the "animals" tab (dashboard view for browsing already-identified
+individuals as a catalogue) may be better named — "animals" feels potentially
+confusing to her, "catalogue" was floated as an alternative but not settled. No
+code implications either way, purely a label. Professor is still thinking about it.
+
+- Trigger: professor confirms a preferred name, or this comes up again during a
+  dedicated UX/naming pass.
+
+## TODO — migrate `testcontainers.postgres` → `testcontainers.community.postgres` (found 2026-08-10)
+
+Surfaced while resolving the `db-restore-drill` docker-run-wiring plan's blocking
+container-id-accessor question: installing `testcontainers[postgres]==4.15.0` into
+the sandbox venv and importing `testcontainers.postgres.PostgresContainer` (the
+module `scripts/db_restore_drill.py` lazy-imports) emits a `DeprecationWarning` —
+the package has moved this import to `testcontainers.community.postgres`. Still
+fully functional in 4.15.0, no behavior change, explicitly left alone in the
+docker-run-wiring CR (out of scope for that change) — see
+`docs/changes/2026-08-09-db-restore-drill.md`.
+
+- Trigger: next `testcontainers` version bump, or a dedicated dependency-hygiene
+  pass — swap the import path in `scripts/db_restore_drill.py`'s lazy import,
+  confirm no API surface changed between the two modules, re-run
+  `tests/scripts/test_db_restore_drill_restore.py`.
+
+## TODO — upgrade prod Postgres 16.13 → 17.9, to match tmgame (found 2026-08-10, discussed 2026-08-11)
+
+Originally surfaced 2026-08-10 while confirming the docker-run wiring's client image
+(`docs/changes/2026-08-09-db-restore-drill.md`): prod's Railway-managed Postgres is
+confirmed 16.13 (16.14 available), while `tmgame` runs 17.9. Not scoped or started at
+the time.
+
+**2026-08-11 addition**: raised again with a concrete rationale — keeping a single
+Postgres major version across projects (webibex, tmgame) simplifies shared DevOps
+workflows (client tooling, backup/restore scripts, image pinning). Still genuinely
+bigger than it sounds: this is an actual production database engine upgrade on
+Railway (not just a client-tooling tag bump), likely needs either an in-place
+upgrade path or a dump/restore migration to a new instance, plus a Django/psycopg2
+compatibility check.
+
+**Sequencing note, this session**: the restore-drill GATE-evidence live run (proving
+backup/restore works against the *current* prod, 16.13 — see the GATE section above)
+had not yet run when this came up. Explicitly not decided whether the PG17 upgrade
+should wait for that run to complete first, or be scoped independently — deferred
+along with the rest of this TODO, not a ruling either way.
+
+- Trigger: next time this is deliberately picked up for scoping — research Railway's
+  major-version upgrade mechanism, decide sequencing relative to the restore-drill
+  GATE work, confirm Django/psycopg2 compatibility with PG17.
+
+## TODO — containerize `scripts/db_restore_drill.py` itself (raised 2026-08-11)
+
+Once the tool is proven working via the host-`uv`-venv path (`scripts/run_db_restore_drill.sh`
+once promoted out of `tmp/`), package it as its own container image for reproducibility
+across machines — matches the DHI-hardening pattern already used for the
+`dhi.io/postgres:16-alpine-dev` client image.
+
+**Proposed structure** (user, 2026-08-11):
+```
+lev_root: orchestrator script (host) calls:
+  lev_1a: Python-deps container (psycopg2, testcontainers, requests --
+          eventually its own DHI Python base image)
+  lev_1b: dhi.io/postgres:16-alpine-dev (already exists -- the pg_dump/
+          pg_restore client image the script already wraps in `docker run`)
+```
+
+**Architectural wrinkle, inherent to this structure, not a separate concern**:
+`lev_1a` is where `db_restore_drill.py`'s own process runs, and that process is the
+thing issuing the `docker run` calls against `lev_1b` *and* driving `testcontainers`
+to spin up the ephemeral Postgres server -- so `lev_1a` containerized still needs a
+way to reach the Docker daemon to create `lev_1b`-family containers. This is the
+"sibling containers" pattern (`-v /var/run/docker.sock:/var/run/docker.sock` + the
+`docker` CLI binary inside `lev_1a`, reaching the *host* daemon directly) -- a
+well-trodden pattern (how many CI systems run Docker jobs), not exotic. `dind`
+(nested daemon, `--privileged`) is the alternative and the worse fit here (worse
+security posture, heavier, storage-driver gotchas). Either way, a container with the
+host socket has effectively host-root-equivalent reach -- a real tradeoff to weigh
+explicitly, given how carefully this script otherwise scopes its
+credential/subprocess/network boundaries (see the docker-run wiring CR,
+`docs/changes/2026-08-09-db-restore-drill.md`). `--network container:<id>` for the
+restore leg should still resolve correctly under this setup (the host daemon
+resolves it, not `lev_1a`'s own netns) -- nothing about the current design needs to
+change, just this one tradeoff made on purpose.
+
+- Trigger: after the host-venv path is proven working end to end (live GATE-evidence
+  run passes) -- scope `lev_1a`'s Dockerfile + `lev_root`'s orchestrator script,
+  decide the socket-mount tradeoff explicitly, route through the planning-TDD
+  pipeline given the security-critical surface.
+
+## TODO — e2e test: railway-like container against the restored local Postgres (raised 2026-08-11)
+
+Today's restore-drill verifies the restored database at the *data* level only
+(row counts on 6 tables + one `Animal` spot-check row). It does not verify
+that the actual webibex Django app can run against that restored database --
+migrations applying cleanly against the restored schema state, the app
+successfully booting and connecting, ORM queries actually working (not just
+raw row counts via `psycopg2`). A restored DB that passes today's checks
+could still fail to serve the real app if e.g. a Postgres extension is
+missing, permissions differ, or migration state is inconsistent.
+
+Idea (user, 2026-08-11): spin up a container mimicking the Railway deployment
+environment (the actual webibex app image, or something close to it) and
+point it at the ephemeral `testcontainers` Postgres once
+`restore_and_verify` has restored it into that container -- run the app for
+real against the restored data as the final, strongest verification step.
+
+- Trigger: next deliberate scoping pass on `scripts/db_restore_drill.py` --
+  decide how "railway-like" the container needs to be (the real Docker image
+  webibex deploys with, if one exists / gets built per the
+  containerization TODO above, vs. a lighter Django-only smoke container),
+  what a minimal "app actually works" check looks like (management command,
+  a single ORM query, a health-check endpoint), and whether this becomes a
+  4th restore-drill checklist item or stays a separate, optional deeper
+  verification tier.
+
+## TODO — add progress/debug logging to `scripts/db_restore_drill.py` (raised 2026-08-11)
+
+During a future refactor pass, add stage-level progress logging through the
+pipeline -- e.g. "railway db connection established", "railway db read start",
+"railway db dump ended", equivalent markers for the restore leg. Currently the
+script is silent until the final PASS/FAIL report (`_print_report`); a long-running
+live invocation gives no feedback on which stage it's in. Should route through the
+existing `_emit()` helper (the documented `print()` exception already used for
+user-facing CLI output) rather than introducing a separate logging mechanism --
+consistent with the script's own established pattern.
+
+- Trigger: next deliberate refactor pass on this script -- not urgent, purely
+  observability/UX, no functional change.

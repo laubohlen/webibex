@@ -61,6 +61,28 @@ def _full_tables_rows():
     return [(t,) for t in EXPECTED_TABLES]
 
 
+def _patch_docker_preflight(monkeypatch, calls: list[str] | None = None):
+    """Decouple these table/version-gate tests from docker entirely --
+    docker preflight itself is covered by test_db_restore_drill_docker.py.
+    `mod._docker_path` and `mod._docker_preflight` are both no-op'd; if
+    `calls` is given, both are recorded into it in call order (used by the
+    ordering test below).
+    """
+    import scripts.db_restore_drill as mod
+
+    def fake_docker_path():
+        if calls is not None:
+            calls.append("_docker_path")
+        return "/usr/bin/docker"
+
+    def fake_docker_preflight(docker_path, image):
+        if calls is not None:
+            calls.append("_docker_preflight")
+
+    monkeypatch.setattr(mod, "_docker_path", fake_docker_path)
+    monkeypatch.setattr(mod, "_docker_preflight", fake_docker_preflight)
+
+
 def test_preflight_source_read_only_connect_kwargs_asserted_exactly(
     monkeypatch, fake_connection_cls, fake_cursor_cls
 ):
@@ -77,8 +99,8 @@ def test_preflight_source_read_only_connect_kwargs_asserted_exactly(
         connect_calls.append((args, kwargs))
         return conn
 
-    monkeypatch.setattr(mod.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path: 16)
+    _patch_docker_preflight(monkeypatch)
+    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path, image: 16)
     monkeypatch.setattr(mod.psycopg2, "connect", fake_connect)
 
     preflight_source(_SOURCE_DSN)
@@ -94,6 +116,33 @@ def test_preflight_source_read_only_connect_kwargs_asserted_exactly(
     # explicit sslmode, normalized the same way libpq_env() normalizes it
     # for the pg_dump/pg_restore subprocess paths.
     assert kwargs["sslmode"] == "require"
+
+
+def test_preflight_source_docker_preflight_runs_before_first_psycopg2_connect(
+    monkeypatch, fake_connection_cls, fake_cursor_cls
+):
+    import scripts.db_restore_drill as mod
+
+    cursor = fake_cursor_cls(
+        fetchone_results=[(160000,)],
+        fetchall_results=[_full_tables_rows()],
+    )
+    conn = fake_connection_cls(cursor)
+    call_order: list[str] = []
+
+    _patch_docker_preflight(monkeypatch, calls=call_order)
+    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path, image: 16)
+
+    def fake_connect(*args, **kwargs):
+        call_order.append("psycopg2.connect")
+        return conn
+
+    monkeypatch.setattr(mod.psycopg2, "connect", fake_connect)
+
+    preflight_source(_SOURCE_DSN)
+
+    assert call_order.index("_docker_path") < call_order.index("psycopg2.connect")
+    assert call_order.index("_docker_preflight") < call_order.index("psycopg2.connect")
 
 
 def test_connect_readonly_rejects_sslmode_disable_on_source_dsn():
@@ -140,8 +189,8 @@ def test_preflight_source_missing_table_raises(
     )
     conn = fake_connection_cls(cursor)
 
-    monkeypatch.setattr(mod.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path: 16)
+    _patch_docker_preflight(monkeypatch)
+    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path, image: 16)
     monkeypatch.setattr(mod.psycopg2, "connect", lambda *a, **k: conn)
 
     with pytest.raises(RuntimeError, match="core_embedding"):
@@ -172,8 +221,10 @@ def test_preflight_source_version_gate(
     )
     conn = fake_connection_cls(cursor)
 
-    monkeypatch.setattr(mod.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path: pg_dump_major)
+    _patch_docker_preflight(monkeypatch)
+    monkeypatch.setattr(
+        mod, "_pg_dump_major_version", lambda path, image: pg_dump_major
+    )
     monkeypatch.setattr(mod.psycopg2, "connect", lambda *a, **k: conn)
 
     if expect_raise:
@@ -184,10 +235,15 @@ def test_preflight_source_version_gate(
         assert info.server_major_version == server_major
 
 
-def test_preflight_source_pg_dump_absent_gives_actionable_message():
-    # pg_dump genuinely isn't installed in this sandbox -- exercises the
-    # real shutil.which(None) branch, no monkeypatching needed.
-    with pytest.raises(RuntimeError, match="pg_dump"):
+def test_preflight_source_docker_absent_gives_actionable_message(monkeypatch):
+    # `docker` genuinely IS installed in this sandbox (confirmed) -- a
+    # real-absence test would silently stop testing this branch. Force
+    # the absent-binary path explicitly instead.
+    import scripts.db_restore_drill as mod
+
+    monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+
+    with pytest.raises(RuntimeError, match="docker"):
         preflight_source(_SOURCE_DSN)
 
 
@@ -201,8 +257,8 @@ def test_preflight_source_driver_error_message_is_redacted(monkeypatch):
             f"could not connect: {_SOURCE_DSN}"  # simulate a leaky driver message
         )
 
-    monkeypatch.setattr(mod.shutil, "which", lambda name: f"/usr/bin/{name}")
-    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path: 16)
+    _patch_docker_preflight(monkeypatch)
+    monkeypatch.setattr(mod, "_pg_dump_major_version", lambda path, image: 16)
     monkeypatch.setattr(mod.psycopg2, "connect", raising_connect)
 
     with pytest.raises(RuntimeError) as exc_info:

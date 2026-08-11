@@ -82,9 +82,10 @@ def fake_connection_cls():
 class FakeCompletedProcess:
     """Duck-typed stand-in for subprocess.CompletedProcess."""
 
-    def __init__(self, stdout="", returncode=0):
+    def __init__(self, stdout="", returncode=0, stderr=""):
         self.stdout = stdout
         self.returncode = returncode
+        self.stderr = stderr
 
 
 class FakePipe:
@@ -126,3 +127,64 @@ class FakePopen:
 def fake_popen_cls():
     FakePopen.instances = []
     return FakePopen
+
+
+class FakeRun:
+    """Duck-typed stand-in for `subprocess.run`. Records every call
+    (positional args, kwargs) and replays a queue of `FakeCompletedProcess`
+    results -- or raises a queued exception instead, for simulating
+    `TimeoutExpired`/`PermissionError`/`FileNotFoundError` from the
+    `docker` binary itself.
+    """
+
+    def __init__(self):
+        self.calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self._queue: list[Any] = []
+
+    def queue_result(self, result: FakeCompletedProcess) -> None:
+        self._queue.append(result)
+
+    def queue_exception(self, exc: BaseException) -> None:
+        self._queue.append(exc)
+
+    def __call__(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        if not self._queue:
+            return FakeCompletedProcess()
+        item = self._queue.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+
+@pytest.fixture
+def fake_run():
+    return FakeRun()
+
+
+_DOCKER_ALLOWLIST_ONLY_VARS = (
+    "DOCKER_CONTEXT",
+    "DOCKER_CONFIG",
+    "DOCKER_CERT_PATH",
+    "DOCKER_TLS_VERIFY",
+    "XDG_RUNTIME_DIR",
+)
+
+
+@pytest.fixture
+def docker_env(monkeypatch):
+    """Sets HOME/PATH/DOCKER_HOST + an unrelated sentinel var, deletes the
+    other 5 docker-context allowlist members -- a controlled `os.environ`
+    slice for `_docker_child_env` tests.
+    """
+    monkeypatch.setenv("HOME", "/home/tester")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("DOCKER_HOST", "unix:///var/run/docker.sock")
+    monkeypatch.setenv("SENTINEL_UNRELATED", "should-not-appear")
+    for name in _DOCKER_ALLOWLIST_ONLY_VARS:
+        monkeypatch.delenv(name, raising=False)
+    return {
+        "HOME": "/home/tester",
+        "PATH": "/usr/bin:/bin",
+        "DOCKER_HOST": "unix:///var/run/docker.sock",
+    }

@@ -18,6 +18,11 @@ checklist end to end:
      `Animal` spot-check row matches field-for-field.
   4. Print a PASS/FAIL report; exit 0 only if everything matched.
 
+`pg_dump`/`pg_restore` run inside one-shot `docker run --rm` containers
+(`--pg-client-image`, default `dhi.io/postgres:16-alpine-dev`) -- this
+tool requires a working Docker installation on PATH. No native
+`postgresql-client` install is needed or used.
+
 Scope: this script only dumps + restores + verifies. It does NOT schedule
 anything, does NOT upload to B2, and does NOT resume the paused
 `backup_db` management command -- see the paused-backup TODO directly
@@ -81,12 +86,19 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 import psycopg2
 import requests
 from environ import Env
+
+if TYPE_CHECKING:
+    # testcontainers is a dev-only dependency, imported lazily at call time
+    # in restore_and_verify() -- this import is type-checking-only (never
+    # executes) so importing this module never requires the package to be
+    # installed.
+    from testcontainers.postgres import PostgresContainer
 from psycopg2 import sql
 from psycopg2.extensions import connection as PGConnection
 
@@ -115,6 +127,10 @@ _SPOT_CHECK_DATE_INDEX = 3  # "capture_date"
 _DEFAULT_PG_PORT = 5432
 _LOOPBACK_HOSTNAME_ALLOWLIST = frozenset({"localhost"})
 
+# pg_dump/pg_restore/psql now run inside `docker run --rm` against this
+# image -- not a secret, safe on argv (see --pg-client-image below).
+DEFAULT_PG_CLIENT_IMAGE = "dhi.io/postgres:16-alpine-dev"
+
 _TOKEN_HEADER_BY_KIND: dict[str, str] = {
     "account": "Authorization",
     "project": "Project-Access-Token",
@@ -127,7 +143,12 @@ _RAILWAY_GRAPHQL_QUERY = (
     "}"
 )
 
-_PROD_MAJOR_VERSION_RE = re.compile(r"^\d+$")
+# `\A...\Z` (not `^...$`) so a trailing newline can't sneak past the end
+# anchor, and an explicit ASCII `[0-9]` (not `\d`, which is Unicode-aware
+# and accepts fullwidth/Arabic-Indic digits) so this can never accept
+# anything but a plain decimal integer -- this value is interpolated
+# directly into a Docker image tag (`postgres:{prod_major_version}-alpine`).
+_PROD_MAJOR_VERSION_RE = re.compile(r"\A[0-9]+\Z")
 
 _REQUIRED_ENV_VARS: tuple[str, ...] = ("DB_DUMP_PASSPHRASE",)  # RAILWAY_API_TOKEN
 # is added conditionally in main() -- unnecessary for a SOURCE_DSN dry-run.
@@ -282,6 +303,243 @@ def _assert_local_target(dsn: str, source_dsn: str | None = None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Docker execution wrapper -- pg_dump/pg_restore run inside `docker run
+# --rm`, never as host binaries. All docker knowledge (argv shape, image/
+# network-id validation, env allowlisting, preflight, rc classification)
+# lives in this section; callers below never build a `docker` argv by hand.
+# ---------------------------------------------------------------------------
+_DOCKER_CONTEXT_ENV_ALLOWLIST: tuple[str, ...] = (
+    "HOME",
+    "PATH",
+    "DOCKER_HOST",
+    "DOCKER_CONTEXT",
+    "DOCKER_CONFIG",
+    "DOCKER_CERT_PATH",
+    "DOCKER_TLS_VERIFY",
+    "XDG_RUNTIME_DIR",
+)
+
+# Dropped from the docker child env by case-sensitive EXACT NAME MATCH
+# only -- no lowercase-variant filtering. This tool's own secret env vars
+# are always uppercase by its own documented convention (see the module
+# docstring), so exact match is the correct, non-surprising behaviour: it
+# never silently drops an unrelated variable that merely happens to
+# lowercase-collide with one of these names.
+_DOCKER_SECRET_ENV_VAR_NAMES: frozenset[str] = frozenset(
+    {"DB_DUMP_PASSPHRASE", "RAILWAY_API_TOKEN", "SOURCE_DSN"}
+)
+
+# `docker run` has no `--` separator before IMAGE, so an image ref
+# beginning with `-` becomes a docker FLAG, not an argument -- that's the
+# real injection surface here (shell metachars are already covered by
+# `shell=False` throughout). Reject leading `-`, any whitespace/control/
+# non-ASCII character, and cap total length well under any real reference
+# ever needed by this tool.
+_IMAGE_REF_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}\Z")
+
+# testcontainers' `Container.id` (via `get_wrapped_container().id`) is the
+# full 64-char lowercase hex Docker container ID; Docker also accepts any
+# unambiguous prefix, so accept the realistic short-id floor of 12 as well.
+# ASCII-only, `fullmatch`-equivalent anchors -- same regex-safety class as
+# `_PROD_MAJOR_VERSION_RE` above.
+_CONTAINER_ID_RE = re.compile(r"\A[0-9a-f]{12,64}\Z")
+
+_ENV_NAME_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*\Z")
+
+# Bare binary name only (no `/`) -- same regex-safety class as
+# `_IMAGE_REF_RE`/`_CONTAINER_ID_RE`/`_PROD_MAJOR_VERSION_RE` (`\A...\Z`
+# anchors, ASCII-only classes).
+#
+# Design rationale: `docker run` stops parsing its own flags at IMAGE, so
+# `command` (positional, strictly AFTER the image) can never become a
+# docker flag and is deliberately never validated here. `entrypoint`'s
+# value, by contrast, sits in the *pre-image flag region* -- the exact
+# region `_IMAGE_REF_RE` defends -- so it gets validated too. Rule for
+# this module: everything before IMAGE is validated, positionals after
+# IMAGE are trusted.
+_ENTRYPOINT_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_.-]{0,63}\Z")
+
+_DOCKER_LEVEL_RETURNCODES: tuple[int, ...] = (125, 126, 127)
+
+_DOCKER_PREFLIGHT_TIMEOUT = 15  # seconds
+
+
+def _docker_child_env(pg_env: dict[str, str]) -> dict[str, str]:
+    """Build the env dict passed to a `docker run` child process.
+
+    Union of the 8 docker-context vars (read from `os.environ`) and
+    `pg_env`, minus the 3 secret env-var NAMES (see
+    `_DOCKER_SECRET_ENV_VAR_NAMES`) -- dropped even if somehow present in
+    `pg_env`. On a name collision between the allowlist and `pg_env`, the
+    allowlist wins for those 8 specific names; `pg_env` wins for
+    everything else (in practice, the `PG*` keys, which never appear in
+    the allowlist at all). A docker-context var absent from `os.environ`
+    is simply omitted from the result -- never an empty-string placeholder.
+    Fresh dict on every call -- no shared mutable state between calls.
+    """
+    result: dict[str, str] = {
+        name: value
+        for name, value in pg_env.items()
+        if name not in _DOCKER_SECRET_ENV_VAR_NAMES
+    }
+    for name in _DOCKER_CONTEXT_ENV_ALLOWLIST:
+        value = os.environ.get(name)
+        if value is not None and name not in _DOCKER_SECRET_ENV_VAR_NAMES:
+            result[name] = value
+    return result
+
+
+def _docker_run_argv(
+    docker_path: str,
+    image: str,
+    env_names: list[str],
+    command: list[str],
+    *,
+    network: str | None = None,
+    interactive: bool = False,
+    entrypoint: str | None = None,
+    no_network: bool = False,
+) -> list[str]:
+    """Build a `docker run --rm` argv list. Never emits `-t`/`--tty`, even
+    when `interactive=True` (`-it` together is never emitted) -- this tool
+    never needs a pseudo-TTY, and allocating one would let docker-CLI
+    chatter corrupt a binary stdout/stdin stream.
+
+    `entrypoint`, when given, bypasses the image's own ENTRYPOINT/CMD
+    dispatch via `--entrypoint <value>` (emitted in the pre-image flag
+    region, after the sorted `-e` block, immediately before IMAGE) --
+    `command` then becomes ARGUMENTS ONLY (e.g. `["--version"]`, never
+    `["pg_dump", "--version"]`). This is the fix for a real bug: some
+    hardened images (`dhi.io/postgres:16-alpine-dev`) don't replicate the
+    official `postgres` image's smart entrypoint dispatch of a positional
+    command -- see docs/changes/2026-08-09-db-restore-drill.md's
+    2026-08-11-bis addendum. `entrypoint=None` (the default) produces
+    byte-identical argv to before this fix -- no `--entrypoint` token at
+    all.
+
+    `no_network` emits the single token `"--network=none"` (mirrors the
+    existing `"--pull=never"` single-token style, not the two-token
+    `["--network", "none"]` form). Mutually exclusive with
+    `network=<container-id>` -- both set raises `ValueError` before any
+    argv is built. Kept as a separate bool rather than a `network="none"`
+    sentinel because `"none"` is already validated (and rejected) as an
+    invalid container id by `_CONTAINER_ID_RE`.
+
+    Raises `ValueError` if `image`, `network`, `entrypoint`, or any of
+    `env_names` fails validation, or if `network` and `no_network` are
+    both given -- never builds an argv containing an unvalidated value or
+    a self-contradictory network configuration.
+    """
+    if not _IMAGE_REF_RE.match(image):
+        raise ValueError(f"invalid docker image ref: {image!r}")
+    if network is not None and not _CONTAINER_ID_RE.match(network):
+        raise ValueError(f"invalid docker network/container id: {network!r}")
+    if network is not None and no_network:
+        raise ValueError("network and no_network are mutually exclusive -- got both")
+    for name in env_names:
+        if not _ENV_NAME_RE.match(name):
+            raise ValueError(f"invalid docker env var name: {name!r}")
+    if entrypoint is not None and not _ENTRYPOINT_RE.match(entrypoint):
+        raise ValueError(f"invalid docker entrypoint: {entrypoint!r}")
+
+    argv = [
+        docker_path,
+        "run",
+        "--rm",
+        "--pull=never",
+        "--security-opt",
+        "no-new-privileges",
+    ]
+    if interactive:
+        argv.append("-i")
+    if no_network:
+        argv.append("--network=none")
+    if network is not None:
+        argv.extend(["--network", f"container:{network}"])
+    for name in sorted(env_names):
+        argv.extend(["-e", name])
+    if entrypoint is not None:
+        argv.extend(["--entrypoint", entrypoint])
+    argv.append(image)
+    argv.extend(command)
+    return argv
+
+
+def _classify_docker_rc(rc: int) -> str:
+    """Classify a subprocess return code as a docker-level failure
+    (daemon/image/exec problem -- rc in `_DOCKER_LEVEL_RETURNCODES`) or a
+    `pg_dump`/`pg_restore` failure (`"pg"`, everything else, including the
+    program's own non-zero exit codes).
+    """
+    return "docker" if rc in _DOCKER_LEVEL_RETURNCODES else "pg"
+
+
+def _docker_path() -> str:
+    path = shutil.which("docker")
+    if path is None:
+        raise RuntimeError(
+            "docker not found on PATH -- install Docker Desktop / Docker "
+            "Engine. pg_dump/pg_restore now run inside `docker run --rm` "
+            "containers, not as host binaries."
+        )
+    return path
+
+
+def _docker_preflight(docker_path: str, image: str) -> None:
+    """Confirm the Docker daemon is reachable, then confirm `image` is
+    already present locally -- exactly 2 `subprocess.run` calls, in that
+    order, never a 3rd (no implicit pull; `docker run` itself always
+    passes `--pull=never`).
+
+    Order is load-bearing: a dead daemon and a missing image both surface
+    as a non-zero `docker image inspect` return code too, so checking the
+    image first would misdiagnose a dead daemon as merely "image missing".
+    """
+    if not _IMAGE_REF_RE.match(image):
+        raise ValueError(f"invalid docker image ref: {image!r}")
+
+    try:
+        version_result = subprocess.run(  # noqa: S603 -- docker_path from shutil.which, fixed argv, shell=False
+            [docker_path, "version", "--format", "{{.Server.Version}}"],
+            capture_output=True,
+            text=True,
+            timeout=_DOCKER_PREFLIGHT_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "docker version timed out -- is the Docker daemon running?"
+        ) from exc
+    except (PermissionError, FileNotFoundError) as exc:
+        raise RuntimeError(f"cannot execute docker at {docker_path!r}: {exc}") from exc
+
+    if version_result.returncode != 0:
+        raise RuntimeError(
+            "docker daemon is not reachable (`docker version` failed) -- "
+            "is Docker running?"
+        )
+
+    try:
+        inspect_result = subprocess.run(  # noqa: S603 -- docker_path from shutil.which, image validated by _IMAGE_REF_RE above, shell=False
+            [docker_path, "image", "inspect", image],
+            capture_output=True,
+            text=True,
+            timeout=_DOCKER_PREFLIGHT_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"docker image inspect {image!r} timed out") from exc
+    except (PermissionError, FileNotFoundError) as exc:
+        raise RuntimeError(f"cannot execute docker at {docker_path!r}: {exc}") from exc
+
+    if inspect_result.returncode != 0:
+        raise RuntimeError(
+            f"docker image {image!r} is not present locally -- this tool "
+            f"never pulls implicitly. Pull it first: docker pull {image}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Railway GraphQL
 # ---------------------------------------------------------------------------
 def fetch_database_url(
@@ -371,14 +629,34 @@ class ServerInfo:
     tables_present: tuple[str, ...]
 
 
-def _pg_dump_major_version(pg_dump_path: str) -> int:
-    result = subprocess.run(  # noqa: S603 -- pg_dump_path resolved via shutil.which, fixed argv, shell=False
-        [pg_dump_path, "--version"],
+def _pg_dump_major_version(docker_path: str, image: str) -> int:
+    # `--entrypoint pg_dump` bypasses the image's own entrypoint dispatch
+    # (some hardened images, e.g. dhi.io/postgres:16-alpine-dev, don't
+    # replicate the official postgres image's smart dispatch of a
+    # positional command -- see the module's `_docker_run_argv`
+    # docstring). A `--version` probe has zero legitimate network need,
+    # so it also always runs with `--network=none`.
+    argv = _docker_run_argv(
+        docker_path,
+        image,
+        [],
+        ["--version"],
+        entrypoint="pg_dump",
+        no_network=True,
+    )
+    result = subprocess.run(  # noqa: S603 -- argv built by _docker_run_argv (image validated), shell=False
+        argv,
         capture_output=True,
         text=True,
-        timeout=10,
-        check=True,
+        timeout=30,
+        check=False,
     )
+    if result.returncode != 0:
+        kind = _classify_docker_rc(result.returncode)
+        raise RuntimeError(
+            f"pg_dump --version failed inside docker (rc={result.returncode}, "
+            f"{kind}-level failure): {result.stderr.strip()}"
+        )
     match = re.search(r"(\d+)(?:\.\d+)*", result.stdout)
     if not match:
         raise RuntimeError(
@@ -414,18 +692,18 @@ def _connect_readonly(dsn: str, timeout: int = 10) -> PGConnection:
         ) from exc
 
 
-def preflight_source(dsn: str) -> ServerInfo:
+def preflight_source(dsn: str, *, image: str = DEFAULT_PG_CLIENT_IMAGE) -> ServerInfo:
     """Validate the source is reachable read-only, has all
-    `EXPECTED_TABLES`, and the local `pg_dump` can actually dump this
+    `EXPECTED_TABLES`, and the dockerized `pg_dump` can actually dump this
     server's major version.
+
+    Docker preflight (`_docker_preflight`) runs before the first
+    `psycopg2.connect` -- fail fast on a docker-level problem (daemon down,
+    image missing) before ever touching the database.
     """
-    pg_dump_path = shutil.which("pg_dump")
-    if pg_dump_path is None:
-        raise RuntimeError(
-            "pg_dump not found on PATH -- install postgresql-client "
-            "(e.g. `apt-get install postgresql-client` / `brew install libpq`)"
-        )
-    local_major = _pg_dump_major_version(pg_dump_path)
+    docker_path = _docker_path()
+    _docker_preflight(docker_path, image)
+    local_major = _pg_dump_major_version(docker_path, image)
 
     conn = _connect_readonly(dsn)
     try:
@@ -530,16 +808,22 @@ def dump_encrypted(
     dsn: str,
     out_path: Path,
     passphrase_env_var: str = "DB_DUMP_PASSPHRASE",  # noqa: S107 -- this is an env *var name*, not a credential value
+    *,
+    image: str = DEFAULT_PG_CLIENT_IMAGE,
 ) -> None:
-    """Stream `pg_dump -Fc` straight into `openssl enc` -- the plaintext
-    dump never touches disk, only the encrypted artifact does.
+    """Stream a dockerized `pg_dump -Fc` straight into `openssl enc` -- the
+    plaintext dump never touches disk, only the encrypted artifact does.
 
     Credentials travel via child-process env only, never argv: `pg_dump`
-    gets `PG*` vars, `openssl` gets the passphrase in a *separate* env
-    dict with no `PG*` vars in it. The artifact is created with mode
-    0o600 via `os.open(..., O_CREAT | O_EXCL | O_WRONLY, 0o600)` (not
-    write-then-chmod -- avoids the TOCTOU window) and refuses to clobber
-    an existing path (`O_EXCL` raises `FileExistsError`, left to
+    (inside `docker run --rm`) gets an allowlisted docker-context env plus
+    `PG*` vars (`_docker_child_env`), `openssl` gets the passphrase in a
+    *separate* env dict with no `PG*` vars in it. `--pull=never` and a
+    prior image preflight (see `preflight_source`) mean this never pulls
+    an image implicitly, and no docker-CLI chatter can reach the binary
+    stdout pipe (no `-t`/`--tty` ever emitted). The artifact is created
+    with mode 0o600 via `os.open(..., O_CREAT | O_EXCL | O_WRONLY, 0o600)`
+    (not write-then-chmod -- avoids the TOCTOU window) and refuses to
+    clobber an existing path (`O_EXCL` raises `FileExistsError`, left to
     propagate as an actionable error). On any pipeline failure the
     artifact is unlinked.
     """
@@ -550,12 +834,25 @@ def dump_encrypted(
             "an encryption passphrase"
         )
 
-    pg_dump_path = shutil.which("pg_dump")
+    docker_path = _docker_path()
     openssl_path = shutil.which("openssl")
-    if pg_dump_path is None:
-        raise RuntimeError("pg_dump not found on PATH -- install postgresql-client")
     if openssl_path is None:
         raise RuntimeError("openssl not found on PATH")
+
+    pg_env: dict[str, str] = dict(libpq_env(dsn))
+    docker_env = _docker_child_env(pg_env)
+    # Build + validate the docker argv (can raise ValueError on a bad
+    # `image`) BEFORE the artifact file is created below. If validation
+    # happened after os.open(), a ValueError here would leave an orphaned
+    # 0600 file behind that the *next* run's O_EXCL would then refuse to
+    # clobber.
+    docker_argv = _docker_run_argv(
+        docker_path,
+        image,
+        sorted(docker_env),
+        ["-Fc", "-w", "--no-owner", "--no-privileges"],
+        entrypoint="pg_dump",
+    )
 
     # Atomic create-with-mode-0600, refuses to clobber an existing artifact
     # (O_EXCL). openssl below opens this same, already-existing, already-
@@ -564,16 +861,15 @@ def dump_encrypted(
     fd = os.open(str(out_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     os.close(fd)
 
-    pg_env: dict[str, str] = dict(libpq_env(dsn))
     ssl_env: dict[str, str] = {passphrase_env_var: passphrase}
 
     p1: subprocess.Popen[bytes] | None = None
     p2: subprocess.Popen[bytes] | None = None
     try:
-        p1 = subprocess.Popen(  # noqa: S603 -- pg_dump_path from shutil.which (trusted binary), fixed argv, shell=False
-            [pg_dump_path, "-Fc", "-w", "--no-owner", "--no-privileges"],
+        p1 = subprocess.Popen(  # noqa: S603 -- argv built by _docker_run_argv (image/env-names validated), shell=False
+            docker_argv,
             stdout=subprocess.PIPE,
-            env=pg_env,
+            env=docker_env,
         )
         p2 = subprocess.Popen(  # noqa: S603 -- openssl_path from shutil.which (trusted binary), fixed argv, shell=False
             [
@@ -599,8 +895,10 @@ def dump_encrypted(
         rc2 = p2.wait(timeout=1800)
 
         if rc1 != 0 or rc2 != 0:
+            kind = _classify_docker_rc(rc1)
             raise RuntimeError(
-                f"dump pipeline failed: pg_dump rc={rc1}, openssl rc={rc2}"
+                f"dump pipeline failed: pg_dump (docker, {kind}-level) "
+                f"rc={rc1}, openssl rc={rc2}"
             )
     except BaseException:
         out_path.unlink(missing_ok=True)
@@ -689,6 +987,60 @@ def _compare_results(
     )
 
 
+def _testcontainers_container_id(container: PostgresContainer) -> str:
+    """Read the full 64-char lowercase hex Docker container ID from a
+    `testcontainers.postgres.PostgresContainer` instance, via
+    `get_wrapped_container().id` (docker-py's `Container.id` property --
+    confirmed by live inspection to read `.attrs["Id"]`, the full ID).
+
+    Any failure reading or validating the id (missing accessor, a
+    testcontainers-internal start failure, or a malformed id) is
+    normalized to an actionable `RuntimeError` -- never lets a raw,
+    library-specific exception escape.
+    """
+    # Broad `except Exception` is intentional here: normalizes any
+    # testcontainers/docker-py failure mode (missing accessor, an
+    # internal ContainerStartException, etc.) into one actionable message
+    # rather than letting a library-specific exception escape.
+    try:
+        container_id = container.get_wrapped_container().id
+    except Exception as exc:
+        raise RuntimeError(
+            f"could not read the testcontainers container id "
+            f"({type(exc).__name__}: {exc})"
+        ) from exc
+
+    if not isinstance(container_id, str) or not _CONTAINER_ID_RE.match(container_id):
+        raise RuntimeError(
+            f"testcontainers container id has an unexpected shape: {container_id!r}"
+        )
+    return container_id
+
+
+def _restore_target_env(target_dsn: str) -> dict[str, str]:
+    """Rewrite `PGHOST`/`PGPORT` to the container-internal loopback
+    address and disable TLS for the *restore* leg only.
+
+    `PGSSLMODE=disable` is legal here ONLY because `_assert_local_target`
+    has already proven `target_dsn` is a genuine loopback host before this
+    function is ever called (restore_and_verify calls the guard first,
+    unconditionally -- see its ordering). The dockerized `pg_restore`
+    reaches this Postgres via `--network container:<id>`, sharing the
+    testcontainers container's network namespace, so traffic never leaves
+    the local machine even with TLS disabled. This is NOT a general TLS
+    downgrade: the source-DSN leg (`libpq_env`/`_connect_readonly`) still
+    refuses `sslmode=disable` unconditionally, and this function must only
+    ever be called strictly AFTER `_assert_local_target` has passed --
+    calling it first would let this function manufacture the very value
+    the guard is supposed to validate, making the guard vacuous.
+    """
+    env = dict(libpq_env(target_dsn))
+    env["PGHOST"] = "127.0.0.1"
+    env["PGPORT"] = str(_DEFAULT_PG_PORT)
+    env["PGSSLMODE"] = "disable"
+    return env
+
+
 def _normalize_container_dsn(dsn: str) -> str:
     """testcontainers' `PostgresContainer.get_connection_url()` returns a
     SQLAlchemy-style URL (e.g. `postgresql+psycopg2://...`) -- strip the
@@ -705,6 +1057,8 @@ def restore_and_verify(
     expected: ExpectedState,
     prod_major_version: int | str,
     source_dsn: str | None = None,
+    *,
+    image: str = DEFAULT_PG_CLIENT_IMAGE,
 ) -> VerifyResult:
     """Spin up a scratch local Postgres container, decrypt+restore the
     dump into it, and compare row counts + the `Animal` spot-check row
@@ -713,8 +1067,27 @@ def restore_and_verify(
     Requires `testcontainers[postgres]` (dev-only, NOT in
     `requirements.txt`) -- imported lazily so importing this module, and
     running the P0 test suite, never requires it to be installed.
+
+    Ordering (load-bearing, in this exact sequence):
+      1. `_assert_local_target` -- the anti-prod-write guard -- runs
+         before any `Popen`.
+      2. `_testcontainers_container_id` / `_restore_target_env` run
+         strictly AFTER (1) has passed. `_restore_target_env` rewrites
+         `PGHOST`/`PGPORT`/`PGSSLMODE`; running it before the guard would
+         let it manufacture the very value the guard validates.
+      3. The post-restore verification `psycopg2.connect` reuses the
+         container's *published* DSN (`target_dsn`, from
+         `get_connection_url()`), never the rewritten container-internal
+         `restore_env` -- reusing `restore_env` here would dial
+         `127.0.0.1:5432` on the HOST, which can silently hit an
+         unrelated real local Postgres instance on some machines.
     """
     try:
+        # testcontainers.postgres is deprecated as of 4.15.0 in favor of
+        # testcontainers.community.postgres (still functional here, no
+        # behavior change) -- tracked in docs/security-remediation-plan.md's
+        # "migrate testcontainers.postgres" TODO, deliberately not fixed in
+        # this CR (out of scope, unrelated to the docker-run wiring).
         from testcontainers.postgres import PostgresContainer
     except ImportError as exc:
         raise RuntimeError(
@@ -733,19 +1106,36 @@ def restore_and_verify(
             f"{passphrase_env_var} is not set -- cannot decrypt the dump artifact"
         )
 
+    docker_path = _docker_path()
     openssl_path = shutil.which("openssl")
-    pg_restore_path = shutil.which("pg_restore")
     if openssl_path is None:
         raise RuntimeError("openssl not found on PATH")
-    if pg_restore_path is None:
-        raise RuntimeError("pg_restore not found on PATH -- install postgresql-client")
 
-    image = f"postgres:{prod_major_version}-alpine"
-    with PostgresContainer(image) as container:
+    pg_server_image = f"postgres:{prod_major_version}-alpine"
+    with PostgresContainer(pg_server_image) as container:
         target_dsn = _normalize_container_dsn(container.get_connection_url())
         _assert_local_target(target_dsn, source_dsn)
 
-        target_env = dict(libpq_env(target_dsn))
+        container_id = _testcontainers_container_id(container)
+        restore_env = _restore_target_env(target_dsn)
+        docker_env = _docker_child_env(restore_env)
+        docker_argv = _docker_run_argv(
+            docker_path,
+            image,
+            sorted(docker_env),
+            [
+                "--no-owner",
+                "--no-privileges",
+                "--exit-on-error",
+                "--single-transaction",
+                "-d",
+                restore_env.get("PGDATABASE", "postgres"),
+            ],
+            network=container_id,
+            interactive=True,
+            entrypoint="pg_restore",
+        )
+
         ssl_env = {passphrase_env_var: passphrase}
 
         p1: subprocess.Popen[bytes] | None = None
@@ -768,18 +1158,10 @@ def restore_and_verify(
                 stdout=subprocess.PIPE,
                 env=ssl_env,
             )
-            p2 = subprocess.Popen(  # noqa: S603 -- pg_restore_path from shutil.which, fixed argv, shell=False
-                [
-                    pg_restore_path,
-                    "--no-owner",
-                    "--no-privileges",
-                    "--exit-on-error",
-                    "--single-transaction",
-                    "-d",
-                    target_env.get("PGDATABASE", "postgres"),
-                ],
+            p2 = subprocess.Popen(  # noqa: S603 -- argv built by _docker_run_argv (image/network/env-names validated), shell=False
+                docker_argv,
                 stdin=p1.stdout,
-                env=target_env,
+                env=docker_env,
             )
             if p1.stdout is not None:
                 p1.stdout.close()
@@ -787,8 +1169,10 @@ def restore_and_verify(
             rc1 = p1.wait(timeout=1800)
             rc2 = p2.wait(timeout=1800)
             if rc1 != 0 or rc2 != 0:
+                kind = _classify_docker_rc(rc2)
                 raise RuntimeError(
-                    f"restore pipeline failed: openssl rc={rc1}, pg_restore rc={rc2}"
+                    f"restore pipeline failed: openssl rc={rc1}, "
+                    f"pg_restore (docker, {kind}-level) rc={rc2}"
                 )
         finally:
             for proc in (p1, p2):
@@ -822,6 +1206,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--spot-id-code", default=None)
     parser.add_argument(
         "--out-path", type=Path, default=Path("webibex_restore_drill.dump.enc")
+    )
+    parser.add_argument(
+        "--pg-client-image",
+        default=DEFAULT_PG_CLIENT_IMAGE,
+        help=(
+            "docker image used to run pg_dump/pg_restore inside `docker "
+            "run --rm` (default: %(default)s). This is NOT a secret -- "
+            "an image reference is fine on argv."
+        ),
     )
     args = parser.parse_args(argv)
     if not os.environ.get("SOURCE_DSN", "").strip():
@@ -900,7 +1293,7 @@ def main(argv: list[str] | None = None) -> int:
                 variable_name=args.variable_name,
                 endpoint=args.endpoint,
             )
-        info = preflight_source(source_dsn)
+        info = preflight_source(source_dsn, image=args.pg_client_image)
 
         conn = _connect_readonly(source_dsn)
         try:
@@ -908,13 +1301,14 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             conn.close()
 
-        dump_encrypted(source_dsn, args.out_path)
+        dump_encrypted(source_dsn, args.out_path, image=args.pg_client_image)
 
         result = restore_and_verify(
             args.out_path,
             expected,
             info.server_major_version,
             source_dsn=source_dsn,
+            image=args.pg_client_image,
         )
     except Exception as exc:
         _emit(f"restore drill failed: {exc}", err=True)

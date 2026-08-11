@@ -96,28 +96,36 @@ _DSN_STATIC_TOKENS = frozenset({"user", "dbhost", "5432", "dbname", "postgresql"
         alphabet=st.characters(
             blacklist_characters="@:/%\n\r\x00", blacklist_categories=("Cs",)
         ),
-        min_size=1,
+        min_size=0,
         max_size=24,
     )
 )
 @example(pw="@")
 @example(pw="%40")
 @example(pw="")
-@settings(deadline=None)
+@example(pw="post")  # substring of the static "postgresql" scheme token
+@example(pw="me")  # substring of the static "dbname" token
+@settings(deadline=None, derandomize=True, max_examples=100)
 def test_redact_dsn_property_password_never_survives(pw):
-    if pw in _DSN_STATIC_TOKENS:
-        return
+    """A generated password must never survive into the redacted DSN --
+    UNLESS it's coincidentally a substring of the redacted skeleton itself
+    (e.g. "post" inside "postgresql", "me" inside "dbname", or "" which is
+    a substring of everything). Those are false positives of a naive
+    membership check, not real credential leaks: the skeleton is built
+    from static scheme/host/port/dbname tokens that never depend on `pw`,
+    so `pw in skeleton` can only ever be a coincidental match against
+    those fixed tokens.
+    """
     dsn = f"postgresql://user:{pw}@dbhost:5432/dbname"
     try:
         redacted = redact_dsn(dsn)
     except ValueError:
         return  # malformed encodings are allowed to be rejected outright
-    if pw and len(pw) > 1:
-        # Single-char passwords (e.g. "@") can coincidentally collide with
-        # the redaction format's own structural separator ("<redacted>@")
-        # without that being a real credential leak -- only multi-char
-        # substrings are a meaningful leak signal.
-        assert pw not in redacted
+
+    skeleton = "postgresql://<redacted>@dbhost:5432/dbname"
+    if not pw or pw in skeleton:
+        return
+    assert pw not in redacted
 
 
 # ---------------------------------------------------------------------------
