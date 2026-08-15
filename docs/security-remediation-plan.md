@@ -721,6 +721,116 @@ intentional (any user can select any region for their own image) rather than
 a gap — worth a quick confirm, not necessarily a fix, when this TODO is
 picked up.
 
+**New, more severe finding (2026-08-14, found while assessing urllib3/boto3
+CVE exploitability)**: `save_landmarks_view` (`core/views.py:101`) has **no
+`@login_required` at all** — unlike the other IDOR entries above, this one
+doesn't even need an authenticated session. Confirmed no global auth gate
+exists either (`MIDDLEWARE` in `webibex/settings.py:86` has no
+`LoginRequiredMiddleware`; the only custom middleware,
+`RedirectToUserFolderMiddleware`, redirects rather than gates). The view
+takes `image-id` straight from `request.POST` with no ownership check, same
+shape as `save_image_location`/`create_loaction` above — but it also calls
+`utils.process_horn_chip()` → `embed_new_chip()` (`core/utils.py:482`) →
+a real outbound `requests.post()` to the RunPod inference API
+(`core/utils.py:247`). Practical effect: an unauthenticated request with any
+guessable/enumerable existing `image-id` (sequential integer PK) can
+overwrite another user's landmark coordinates *and* trigger a billed RunPod
+inference call, no login needed. Distinct from — and a superset of — the
+"acting on another user's data" IDOR class above: this one doesn't require
+being a user at all. (Checked as part of assessing whether the
+`urllib3==1.26.20`/`boto3==1.26.0`/`botocore==1.29.165` pins are
+exploitable — TLS verification is default/on in both the `requests` and
+`boto3` calls, no `proxies=` config found, so the pinned CVEs themselves need
+a compromised upstream to trigger; this unauthenticated-view gap is the
+actually-reachable issue, not the CVEs.) Same audit also surfaced
+`results_over_view`, `default_chip_compare_view`, `project_chip_compare_view`,
+`geographic_chip_compare_view`, `rerun_view` as missing `@login_required` —
+none of these reach outbound network calls (DB queries + in-process distance
+math only), but all leak cross-user `IbexChip`/embedding/animal data to
+anonymous requests. Candidate fix: add `@login_required` to all six views —
+cheap (one decorator each), doesn't touch the pinned-dependency question at
+all, and closes the *unauthenticated* population down to the already-trusted
+login-gated one immediately. Does not by itself close the underlying IDOR
+(any *authenticated* user could still target another user's `image-id`) —
+that needs the same owner-check work already scoped above for
+`save_image_location`/`create_loaction`.
+
+**Re-verified, no legitimate exception (2026-08-14)**: traced every template
+that links into each of the six (`unidentified_images.html`,
+`animal_images.html`, `animal_images_owner.html`, `multi_landmarking.html`,
+`header.html`'s nav) — every entry point is already gated (`@login_required`
+on the linking view, or `{% if user.is_authenticated %}` in the nav).
+`rerun_view` has no entry point at all. No demo/preview flow anywhere
+depends on anonymous access — `welcome_view` is the only view meant to stay
+public. Confirms this is a missed-decorator gap, not an intentional design
+choice.
+
+**Decision: full planning-TDD pipeline, not a direct patch** — the diff
+itself is mechanical (6 one-line additions, an already-established pattern),
+but it's an auth-boundary change and needs real regression coverage: each
+view proven to reject anonymous access, proven to still work for an
+authenticated user, and — for `save_landmarks_view` specifically — proven
+the RunPod-triggering path is actually blocked pre-auth. Simplicity of the
+change doesn't reduce the test bar for a security-sensitive fix.
+
+**RESOLVED (2026-08-14)**: all 6 views (`save_landmarks_view`,
+`results_over_view`, `default_chip_compare_view`, `project_chip_compare_view`,
+`geographic_chip_compare_view`, `rerun_view`) now carry `@login_required` in
+`core/views.py`, added bottom-up by line number so earlier line numbers stayed
+valid across edits — zero other lines touched, confirmed via `git diff
+core/views.py` (exactly 6 one-line insertions). New test file
+`tests/core/test_views_auth_required.py` (46 tests, T01-T25 per the
+planning-TDD test spec matrix): anonymous GET/POST proven 302-to-login for
+all 6 (parametrized sweeps plus per-view targeted tests), never a 200 and
+never the pre-existing-bug 404/exception that removing the decorator would
+otherwise expose; `geographic_chip_compare_view` (no URL route) called
+directly via `RequestFactory` + explicit `AnonymousUser`; the R2 proof for
+`save_landmarks_view` specifically — anonymous POST asserted to never reach
+`utils.process_horn_chip`, never touch the `no_network`-guarded
+`requests.post` boundary, never create an `IbexChip`, never mutate the
+`LandmarkItem` rows it was given. Authenticated behavior proven unchanged
+(happy paths, delegation branches via a real spy not a stub, owner/year-range
+gallery scoping). The two pre-existing bugs already known before this fix —
+`rerun_view`'s `TemplateDoesNotExist` (renders a template file that doesn't
+exist) and `save_landmarks_view`'s GET-returns-`None`-so-Django-raises-
+`ValueError` — are pinned as still-present, explicitly out of scope, not
+fixed here. Full suite: 325 passed (279 pre-fix baseline + 46 new), 1
+skipped, 1 xfailed — zero regressions elsewhere. `ruff check` clean (`tests/`
+line-length violations fixed; `core/views.py` is fully ruff-exempted per
+`ruff.toml`). `pyright` was already not clean project-wide before this CR
+(`pyrightconfig.json` was only added 2026-08-09 as a first-ever baseline,
+"matches this repo's de facto current state" per that commit) — this fix
+introduces zero new pyright errors (verified: no error references
+`login_required`; the new test file's errors are the same pre-existing
+`Model.objects`/`WSGIRequest.user` stub-gap pattern already present in
+`conftest.py`, `core/signals.py`, and multiple existing test files). Manual
+mutant-matrix (each of the 6 decorators removed one at a time, full test file
+re-run, decorator restored before moving to the next) confirmed every one is
+independently covered by at least one failing test — see
+`docs/changes/2026-08-14-login-required-unauthenticated-views.md` for the
+per-view kill list, including the notable finding that `project_chip_compare_view`'s
+GET-sweep case doesn't itself catch that view's own decorator removal (the
+"not toggle=false" branch delegates into `geographic_chip_compare_view`,
+whose own still-present decorator masks it) — killed instead by the
+toggle=false-branch and delegation-mock tests, which exercise the code path
+that actually needs `project_chip_compare_view`'s own gate.
+
+**Still open, NOT closed by this fix** — this fix closes the *unauthenticated*
+population down to the already-trusted login-gated one; it does not touch the
+underlying IDOR class documented above (an *authenticated* user acting on
+another user's data via `save_image_location`, `create_loaction`, or
+`save_landmarks_view`'s missing owner check on `image-id`). That remains a
+separate, already-tracked, still-open item.
+
+**TODO — version bump not part of this fix**: the note above ("this batch
+will also need a project version bump") was explicitly deferred by the user
+for this batch. This repo has no `VERSION` file or `pyproject.toml` yet
+(only `requirements.txt`) — there is no `[project.version]` (or equivalent)
+field to bump. A proper `pyproject.toml` is planned as separate future work,
+not part of this security fix. Revisit alongside that future `pyproject.toml`
+migration, or whenever this project adopts an explicit version-tracking
+mechanism.
+
 ## TODO — behavioral gaps in auth-hardening test coverage (found 2026-07-25, RESOLVED 2026-07-25)
 
 Surfaced by a `/request-adherence` check run against the auth/session
@@ -1159,6 +1269,27 @@ notes:
   (DB backup, image versioning, ransomware/immutability) get resolved together rather
   than piecemeal. Not blocking current work — this is a hardening layer on top of the
   basic backup, not a prerequisite for it.
+
+**Resolved design (2026-08-12), still not built**: if/when the paused DIY
+`backup_db` → B2 script (see the DB-backup TODO above) gets built, backups go
+to a **dedicated separate bucket**, not `wibex-storage` with just a separate
+key. This isn't only extra isolation — it resolves a real conflict the
+Feasibility Check above doesn't spell out: **compliance-mode Object Lock on
+`wibex-storage` would also block the app's own legitimate delete path**
+(`core/b2_utils.py:66-74` `delete_files()`, called by the working
+single-image Delete button). You cannot make the live media bucket
+delete-capable for the app *and* undeletable-by-anyone-including-us at the
+same time. A separate backup-only bucket sidesteps this entirely: the live
+bucket stays deletable for app functionality, the backup bucket goes fully
+immutable.
+
+Full design: separate bucket, holding only backup artifacts + a B2
+application key scoped to that bucket alone (B2 keys can be bucket-scoped at
+creation — a leaked backup-write key then can't list/read/delete
+`wibex-storage` at all, not just "shouldn't"), with compliance-mode Object
+Lock enabled on it. Marginal cost is effectively zero — B2 doesn't charge per
+bucket, only per GB stored/transferred, and DB dumps are tiny next to the
+existing image corpus.
 
 ## TODO — no real browser-automation tool available for manual E2E checks (found 2026-08-01)
 
@@ -1725,3 +1856,69 @@ consistent with the script's own established pattern.
 
 - Trigger: next deliberate refactor pass on this script -- not urgent, purely
   observability/UX, no functional change.
+
+## TODO — audit GitHub repo settings for PR/Actions automation abuse from outside contributors (raised 2026-08-11)
+
+No audit has been done yet of the webibex GitHub repo's own settings around
+what an external/fork PR is allowed to trigger automatically. Needs a check
+(not a fix yet) of things like:
+
+- Actions run approval requirement for first-time/outside contributors
+  (`Settings > Actions > General > Fork pull request workflows`) -- should
+  require approval, not auto-run.
+- Whether any workflow triggers on `pull_request_target` (runs with the base
+  repo's secrets/permissions against untrusted fork code -- the classic
+  privilege-escalation footgun) vs. the safer `pull_request` trigger.
+- Branch protection on `main`/default branch -- required reviews, required
+  status checks, whether force-push/deletion is blocked.
+- Who can create/modify workflow files, add collaborators, or manage
+  secrets.
+- Default `GITHUB_TOKEN` permissions (should be read-only unless a workflow
+  explicitly needs write).
+
+Also to research (not adopt yet): **[github-threat-detector](https://github.com/supplychain-labs/github-threat-detector)**
+(supplychain-labs) -- a Python/PostgreSQL tool that collects repo/org
+activity signals (push events, commit metadata, Actions workflows/runs, tag
+history, repo config, contributor identity) and runs 33 SQL-driven
+heuristic rules against them: secret-exfiltration/OIDC-token-abuse workflow
+patterns, forged/ghost commit authors, unverified commits on protected
+refs, tag flip-flop/mass-force-push poisoning, mass deletions, deleted
+workflow runs, invisible-Unicode/symlink-traversal git tricks. Needs a
+GitHub PAT + local Postgres + git; CLI flow is
+`init-db` -> `collect --repos owner/repo` -> `analyze` -> `report`. Worth
+understanding whether it's a one-shot audit tool or meant to run on a
+schedule, and whether its detection rules overlap with what plain repo
+settings + branch protection already cover vs. add something new (forged
+commits / tag poisoning / anomaly detection are outside what GitHub's own
+settings can express).
+
+- Trigger: dedicated security pass on repo/org-level GitHub configuration --
+  check settings first (cheap, no new tooling), then decide whether
+  github-threat-detector's heuristics justify standing up the extra
+  Postgres+PAT infrastructure. Explicitly check-and-learn only for now, no
+  adoption decision yet.
+
+## TODO — confirm B2 "Block Public Access"-equivalent bucket setting explicitly (raised 2026-08-12)
+
+Line 1150 above already flagged the `wibex-storage` bucket as "appears to be a
+plain private bucket... not confirmed" from code alone. That's now partially
+closed: a live test (stripping the `X-Amz-*` querystring from a real presigned
+media URL and requesting the bare object directly) returned `HTTP/1.1 401` /
+`WWW-Authenticate: AWS4-HMAC-SHA256` -- the bucket does require signed
+requests, confirmed empirically, not just inferred from `AWS_DEFAULT_ACL`/
+`AWS_QUERYSTRING_AUTH` defaults in `core/b2_utils.py` and
+`webibex/settings.py`.
+
+What's still open: whether B2's bucket-level "private" classification is an
+explicit, deliberate setting (equivalent to AWS S3's "Block All Public
+Access"), or whether it's just the bucket type's default with no public
+bucket policy ever attached -- same practical result today, but the former is
+a documented, intentional control and the latter is one bucket-settings
+misclick away from silently going public. Needs a direct look in the
+Backblaze B2 web console (not visible from this repo or from an HTTP probe)
+to confirm which.
+
+- Trigger: next B2/storage-related security pass, or whenever bucket settings
+  are touched for another reason (e.g. Object Lock/versioning decisions,
+  TODOs above) -- fold this check in rather than a standalone trip to the
+  console.

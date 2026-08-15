@@ -35,6 +35,9 @@ unblocked with confirmed owner-only semantics, ready to implement — ruff
 baseline config, logging/observability pass, documentation gaps,
 `allauth.mfa` evaluation. "Delete" tool: confirmed by the professor
 (2026-08-08) to stay hidden, no real-implementation work needed now.
+GitHub repo-settings audit (fork-PR/Actions automation abuse, branch
+protection) + `github-threat-detector` research, both check-and-learn only
+for now (raised 2026-08-11).
 
 ## Track: TF1 → TF2 Migration (`triplet-reid` pipeline)
 

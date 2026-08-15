@@ -191,3 +191,4 @@ docs/session-notes-*.md
 
 # db_restore_drill.py output -- real encrypted prod dumps, never committed
 *.dump.enc
+.worktrees/
