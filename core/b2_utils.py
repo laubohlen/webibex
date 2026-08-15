@@ -11,6 +11,15 @@ if TYPE_CHECKING:
     # production (Railway installs requirements.txt alone) -- these names
     # are type-checking-only (never executed), so importing this module
     # never requires the stub package to be present at runtime.
+    #
+    # Below, S3ServiceResource stays quoted ("S3ServiceResource") because
+    # it's used as a function return-type annotation -- those ARE evaluated
+    # eagerly at def time regardless of TYPE_CHECKING, so an unquoted use
+    # would NameError at import time. ObjectIdentifierTypeDef is used only
+    # as a local variable annotation inside a function body -- CPython never
+    # evaluates those at runtime (verified: `def f(): x: Undefined = 1` does
+    # not raise) -- so it's intentionally left unquoted; ruff's UP037 rule
+    # enforces this automatically (would flag it if re-quoted).
     from mypy_boto3_s3 import S3ServiceResource
     from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
 
@@ -73,7 +82,7 @@ def delete_files(
     bucket_file_path_list: list[str], bucket_name: str = AWS_STORAGE_BUCKET_NAME
 ) -> None:
     b2_resource = get_b2_resource()
-    objects: list["ObjectIdentifierTypeDef"] = [
+    objects: list[ObjectIdentifierTypeDef] = [
         {"Key": key} for key in bucket_file_path_list
     ]
     try:

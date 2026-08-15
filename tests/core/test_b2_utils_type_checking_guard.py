@@ -150,11 +150,20 @@ def test_stub_imports_are_type_checking_only_and_quoted():
     assert "S3ServiceResource" in type_checking_import_names
     assert "ObjectIdentifierTypeDef" in type_checking_import_names
 
-    # every reference to these two names as an annotation must be a quoted
-    # forward-ref -- a bare (unquoted) annotation would force evaluation
-    # at def time regardless of TYPE_CHECKING, defeating the guard.
+    # S3ServiceResource is used as a function return-type annotation --
+    # those ARE evaluated eagerly at def time regardless of TYPE_CHECKING,
+    # so it must stay a quoted forward-ref or the module would NameError at
+    # import time. Verified: `def f() -> Undefined: ...` raises immediately.
     assert '"S3ServiceResource"' in source
-    assert '"ObjectIdentifierTypeDef"' in source
+
+    # ObjectIdentifierTypeDef, by contrast, is used only as a local
+    # variable annotation inside a function body -- CPython never evaluates
+    # those at runtime (verified empirically: `def f(): x: Undefined = 1`
+    # does not raise), so quoting it would be redundant. ruff's UP037 rule
+    # agrees and flags/auto-fixes a quoted local-variable annotation --
+    # assert it stays unquoted so this test and ruff never fight each other.
+    assert "list[ObjectIdentifierTypeDef]" in source
+    assert '"ObjectIdentifierTypeDef"' not in source
 
 
 # T08 -------------------------------------------------------------------
