@@ -1,5 +1,7 @@
 """Shared fixtures for the `core` app test package."""
 
+import sys
+from contextlib import contextmanager
 from io import BytesIO
 from types import SimpleNamespace
 from unittest import mock
@@ -294,3 +296,61 @@ def moto_b2():
         setup_resource = boto3.resource("s3", region_name="us-east-1")
         setup_resource.create_bucket(Bucket="test-bucket")
         yield boto3.client("s3", region_name="us-east-1")
+
+
+# ---------------------------------------------------------------------------
+# sys.modules poisoning -- shared by tests/core/test_b2_utils_type_checking_
+# guard.py (R1) and tests/webibex/test_prod_dependency_parity.py (R2).
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def poison_modules():
+    """Factory fixture: `poison_modules(names, recursive=True)` returns a
+    context manager that sets `sys.modules[name] = None` for each name in
+    `names` (a single str or an iterable of str).
+
+    A poisoned entry makes the NEXT `import <name>` (or a fresh
+    `importlib.import_module(<name>)` after evicting any cached module)
+    raise `ModuleNotFoundError` -- this is how Python's import system
+    simulates "package genuinely not installed" without actually
+    uninstalling anything.
+
+    `recursive=True` (the default) additionally poisons every key ALREADY
+    present in `sys.modules` that starts with `f"{name}."` -- required
+    because poisoning only the parent does NOT block
+    `from parent.sub import X` when `parent.sub` is already cached (a
+    real, empirically-confirmed gap: `core.b2_utils` imports
+    `mypy_boto3_s3.type_defs`, a submodule, not just the top-level
+    package).
+
+    Restoration happens in a `finally` block (survives `BaseException`,
+    not just `Exception`) by snapshotting the ENTIRE `sys.modules` dict
+    before poisoning and restoring that exact snapshot afterward -- this
+    also undoes any fresh imports performed inside the `with` block, so
+    there is zero cross-test `sys.modules` leakage.
+    """
+
+    @contextmanager
+    def _poison(names, *, recursive=True):
+        if isinstance(names, str):
+            names = [names]
+        snapshot = dict(sys.modules)
+        try:
+            for name in names:
+                # `sys.modules[name] = None` is the real, documented
+                # CPython import-system idiom for "simulate this module
+                # is not installed" -- the next lookup raises
+                # ModuleNotFoundError instead of falling through to a
+                # real import. `sys.modules` is typed as
+                # dict[str, ModuleType]; pyright can't express this
+                # deliberately-untyped stdlib idiom.
+                sys.modules[name] = None  # pyright: ignore[reportArgumentType]
+                if recursive:
+                    for key in list(sys.modules):
+                        if key.startswith(f"{name}."):
+                            sys.modules[key] = None  # pyright: ignore[reportArgumentType]
+            yield
+        finally:
+            sys.modules.clear()
+            sys.modules.update(snapshot)
+
+    return _poison
