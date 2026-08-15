@@ -1922,3 +1922,61 @@ to confirm which.
   are touched for another reason (e.g. Object Lock/versioning decisions,
   TODOs above) -- fold this check in rather than a standalone trip to the
   console.
+
+## TODO — Postgres collation version mismatch, prod DB (found 2026-08-15)
+
+`manage.py showmigrations` against the live Railway Postgres (`railway` db)
+surfaced: `WARNING: database "railway" has a collation version mismatch --
+created using collation version 2.36, but the operating system provides
+version 2.41`. Not breaking anything today, but any index or constraint
+relying on text ordering (unique constraints, `ORDER BY`, B-tree indexes on
+`varchar`/`text` columns) was built under the old sort order -- a latent risk
+of subtly wrong query results or index corruption until reconciled. Standard
+fix, in order: `REINDEX DATABASE railway;` (rebuilds all text-ordered indexes
+under the new collation) then `ALTER DATABASE railway REFRESH COLLATION
+VERSION;` (clears the warning).
+
+**Size checked (2026-08-15, Railway dashboard stats panel -- no `pg_size_pretty`/
+`pg_database_size` exec access available)**: 11.2 MB database total (tables
+1.4 MB, indexes 1.5 MB, system 7.9 MB, other 375 KB; WAL 32 MB separately,
+unrelated to reindex cost). At this size `REINDEX DATABASE` is a sub-second
+operation -- no maintenance-window-driven urgency, no meaningful difference
+between plain `REINDEX DATABASE` (brief per-table exclusive lock) and
+`REINDEX DATABASE ... CONCURRENTLY` (PG16.13 supports it, zero lock, slightly
+longer runtime + ~2x temp space per index, cost is negligible either way at
+this size). Recommend `CONCURRENTLY` anyway since it's strictly safer at no
+real cost here.
+
+- Trigger: **give notice to the professor before running** (production DB
+  change, courtesy/awareness -- not because of expected disruption at this
+  size) -- then execute `REINDEX DATABASE CONCURRENTLY railway;` followed by
+  `ALTER DATABASE railway REFRESH COLLATION VERSION;` on Railway's `railway`
+  db. No specific time-of-day needed.
+
+## TODO — no B2-vs-DB reconciliation/orphan-detection tool exists (raised 2026-08-15)
+
+Checked: no script anywhere in the repo cross-references live B2 bucket objects
+against DB rows that should reference them. Two independent drift directions,
+neither currently detectable:
+
+1. **Orphaned B2 objects** -- files sitting in `wibex-storage` with no matching
+   DB row. Known, *guaranteed* source already documented above
+   ("dead code and missing guards in `process_horn_chip`", found 2026-07-30,
+   line ~1600): replacing a cloud chip leaves the old B2 file behind --
+   `b2_utils.delete_files` is commented out, and the log message falsely
+   claims the deletion happened. Some amount of this drift already exists in
+   the live bucket; unknown how much.
+2. **Orphaned DB rows** -- `IbexImage.file`/`IbexChip.file` (and any other
+   FileField/ImageField) pointing at a B2 key that no longer exists. Silent
+   failure mode: `b2_utils.download_file()` returns `None` at request time
+   with no direct error until something downstream tries to use the result.
+
+**Proposed shape**: read-only/audit-only script (no auto-delete -- consistent
+with the cautious stance on data loss elsewhere in this doc), listing all
+bucket keys vs. all DB file paths, diffing both directions, reporting
+mismatches for manual review.
+
+- Trigger: next storage/B2-related maintenance pass -- could combine with the
+  `process_horn_chip` orphan-file fix above (line ~1590) once that's
+  scheduled, since fixing the leak and auditing the existing damage are
+  naturally the same trip.
