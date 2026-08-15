@@ -1,12 +1,18 @@
 import logging
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import boto3  # https://pypi.org/project/boto3/
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from environ import Env
-from mypy_boto3_s3 import S3ServiceResource
-from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
+
+if TYPE_CHECKING:
+    # boto3-stubs[s3] is dev-only (requirements-dev.txt), never installed in
+    # production (Railway installs requirements.txt alone) -- these names
+    # are type-checking-only (never executed), so importing this module
+    # never requires the stub package to be present at runtime.
+    from mypy_boto3_s3 import S3ServiceResource
+    from mypy_boto3_s3.type_defs import ObjectIdentifierTypeDef
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +36,7 @@ def get_b2_resource(
     endpoint: str = AWS_S3_ENDPOINT_URL,
     key_id: str = AWS_ACCESS_KEY_ID,
     application_key: str = AWS_SECRET_ACCESS_KEY,
-) -> S3ServiceResource:
+) -> "S3ServiceResource":
     b2 = boto3.resource(
         service_name="s3",
         endpoint_url=endpoint,  # Backblaze endpoint
@@ -67,7 +73,7 @@ def delete_files(
     bucket_file_path_list: list[str], bucket_name: str = AWS_STORAGE_BUCKET_NAME
 ) -> None:
     b2_resource = get_b2_resource()
-    objects: list[ObjectIdentifierTypeDef] = [
+    objects: list["ObjectIdentifierTypeDef"] = [
         {"Key": key} for key in bucket_file_path_list
     ]
     try:
