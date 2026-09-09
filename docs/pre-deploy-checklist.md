@@ -63,6 +63,11 @@ unchanged**. Nothing below is live until it reaches `origin`.
       `rerun_view` has no entry point at all (dead-linked). No demo/preview
       flow depends on anonymous access anywhere — `welcome_view` is the only
       view meant to stay public.
+      **Open item (item-1 identification-tab fix)**: `animal_images_owner.html`
+      lost its only entry point (the removed Identification-tab listing) and
+      currently has none — same category as `rerun_view`. Decision pending
+      on whether to restore access or delete the view/route/template as
+      dead code; see `security-remediation-plan.md`.
       **Routing through the full planning-TDD pipeline** (code-planner →
       code-analyst → code-executioner), not applying directly — the fix
       itself is mechanical (6 one-line `@login_required` additions, copying

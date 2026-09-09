@@ -683,10 +683,6 @@ def create_loaction(request, oid):
 
 @login_required
 def images_overview(request):
-    # get all animals that are linked to one or more images
-    animals = Animal.objects.annotate(
-        image_count=Count("ibeximage", filter=Q(ibeximage__owner=request.user))
-    ).filter(image_count__gt=0)
     # get all images that are not linked to any animal
     nr_unidentified_images = len(
         IbexImage.objects.filter(animal_id__isnull=True, owner=request.user)
@@ -696,7 +692,6 @@ def images_overview(request):
         request,
         "core/images_overview.html",
         {
-            "animals": animals,
             "no_id_count": nr_unidentified_images,
         },
     )

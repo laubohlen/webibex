@@ -765,6 +765,21 @@ depends on anonymous access — `welcome_view` is the only view meant to stay
 public. Confirms this is a missed-decorator gap, not an intentional design
 choice.
 
+**Open item (item-1 identification-tab fix, this session)**:
+`animal_images_owner.html`'s only entry point was the Identification tab's
+(now-removed) duplicated animal listing in `images_overview.html`. That
+template now has **no entry point at all** — same category as `rerun_view`
+above. `animal_images_owner_view` and its template still work correctly if
+reached directly by URL; there's just no in-app link to it anymore.
+Decision pending (tracked alongside the region/project question already
+put to the professor, `tmp/domanda-professore-region-project.md`): is
+"view just my own photos of this animal" (as distinct from the global
+per-animal view, already reachable via Animals and Results tabs) a wanted
+feature? If yes, restore access with a small link on the Animals tab
+(drafted and reverted this session — trivial to reapply). If no, delete
+`animal_images_owner_view`, its route, and its template as genuine dead
+code.
+
 **Decision: full planning-TDD pipeline, not a direct patch** — the diff
 itself is mechanical (6 one-line additions, an already-established pattern),
 but it's an auth-boundary change and needs real regression coverage: each
