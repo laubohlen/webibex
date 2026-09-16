@@ -97,27 +97,101 @@ corrupt image bytes, missing local file) alongside 2 structural regression guard
 (`hasattr` checks confirming `get_tf`/`ENDPOINT_LOCALLY` are gone — both went red
 against pre-deletion code, green after, proving they're real guards not tautologies).
 
-### OpenStreetMap ToS exposure (CR-2) — status: on the radar, not blocking (2026-07-31)
+### OpenStreetMap ToS exposure (CR-2) — status: confirmed reproducible, root cause identified (2026-09-11)
 
 webibex hits `tile.openstreetmap.org/{z}/{x}/{y}.png` directly via Leaflet in
-**6 templates**, verified by grep 2026-07-31 (doc previously said 7 — corrected):
+**7 surfaces**, re-verified 2026-09-11 (doc previously said 6, and separately
+claimed `region_create.html` has no map — both corrected): 6 templates with their
+own inline `<script>` block duplicating the `L.tileLayer(...)` call —
 `templates/core/location_create.html`, `multi_location_create.html`,
 `region_create_naming_error.html`, `region_delete.html`, `region_read.html`,
-`region_update.html`. Each template has its own inline `<script>` block with a
-duplicated `L.tileLayer(...)` call — there's no shared partial/include for the map
-JS. `region_create.html` itself has no map (only its `_naming_error` variant does).
+`region_update.html` — plus `region_create.html` itself, which **does** have a live
+map (`id="map"` at `region_create.html:38`) driven by the same raw tile call via a
+shared external script, `static/js/region_create.js:5-7`. So there's no shared
+partial/include across the 6 inline-script templates, but `region_create.html` is
+the one case that already uses a shared JS file (`region_create.js`) — worth
+reusing as the single injection point for that template's fix.
 Attribution is correct, but OSMF's Tile Usage Policy is explicit that this server is
 for light/dev/evaluation use only — OSMF can throttle/block without warning.
+
+**Confirmed root cause (2026-09-11)**: this has moved from theoretical ToS exposure
+to a reproduced bug. The professor reported the literal `403r` OSM error tile
+rendering inside webibex's map instead of real tiles (screenshot confirmed:
+OSM's "Access blocked / Referer is required by tile usage policy" tile, per
+[wiki.openstreetmap.org/wiki/Blocked_tiles](https://wiki.openstreetmap.org/wiki/Blocked_tiles)).
+It was independently reproduced locally in Firefox with NoScript + uBlock Origin
+enabled — confirming this is not network-, IP-, or geography-specific. Per OSM's
+own troubleshooting doc, this `403r` variant is an automated, self-resolving check
+for a missing HTTP `Referer` header, and OSM explicitly names "enhanced privacy
+settings and/or extensions in your browser or anti-virus software" as a known
+cause of Referer-stripping. The one genuinely app-controllable gap on webibex's
+side: `webibex/settings.py` never overrides `SECURE_REFERRER_POLICY`, so Django's
+default (`"same-origin"`) applies — not one of OSM's own listed compliant values
+(`no-referrer-when-downgrade`, `origin`, `origin-when-cross-origin`, `strict-origin`,
+`strict-origin-when-cross-origin`). **Correction**: an earlier version of this note
+also flagged "no app-identifying User-Agent" as a gap — that's wrong for a
+browser-based client. OSM's own policy explicitly exempts browsers from the
+custom-User-Agent requirement ("Browsers will use the browser's default
+User-Agent" — policy §3.1); the stricter §3.4 rule (must configure a distinct,
+stable User-Agent) targets non-browser HTTP clients/SDKs (native apps, server-side
+requests using generic UAs like `okhttp`/`python-requests`/`curl`), which doesn't
+apply here since all 7 tile calls are client-side Leaflet in a browser. OSMF also
+announced (31 Jul 2025) it had "recently stepped up enforcement against applications
+that do not correctly identify themselves via the HTTP User-Agent header" — real,
+but aimed at that non-browser class of traffic, not at webibex's browser calls.
+Since that announcement, blocked tiles return HTTP 200 with an image-based error
+tile + an `x-blocked` response header, not a raw HTTP 403 — worth knowing if
+debugging via browser devtools network status codes rather than the rendered
+tile image.
+
+**Two distinct error-tile variants observed, not one** (per
+`wiki.openstreetmap.org/wiki/Blocked_tiles`, which documents three: `403r`, a
+general `403`, and `451` for missing attribution — the last not relevant here):
+the professor's screenshot showed the specific `403r` "Referer is required" tile.
+Reproducing locally in Firefox with NoScript + uBlock Origin instead produced the
+*general* `403` ("not following the tile usage policy") tile — the wiki's broader
+bucket covering misidentification (non-unique/spoofed User-Agent — plausible here,
+since privacy-hardened Firefox configurations commonly normalize the UA string to
+reduce fingerprinting), scraping, rate-limiting, or caching issues. Not yet
+confirmed which specific sub-trigger fired locally (would need to inspect the
+actual failed request's headers in devtools); noted as a real open question, not
+assumed to be identical to the professor's case.
+
+**Fix priority, given the reproduction**: a compliant `SECURE_REFERRER_POLICY` is a
+cheap interim mitigation worth trying first — it's the one change actually within
+webibex's control, and standard/default browsers (no extensions) currently omit
+Referer on the tile request purely because of this app-side setting, so fixing it
+should resolve the `403r` case for that population. **Its coverage is limited,
+though**: it does nothing for the general/misidentification `403` bucket (driven by
+the browser/extension's own User-Agent behavior, outside the app's control since
+browser-default UA is already policy-compliant), and it doesn't help users whose
+extensions/AV strip Referer client-side regardless of the page's declared policy —
+OSM's own remedy for both of those is user-side ("add an exception for
+tile.openstreetmap.org"), which webibex cannot enforce. **MapTiler remains the
+real, structural fix, not just a ToS-compliance nicety**: it authenticates via API
+key + domain restriction, sidestepping both the Referer- and User-Agent-driven
+failure classes entirely, rather than depending on every visitor's browser config.
+Given the effort is small (see implementation checklist below) and the
+`SECURE_REFERRER_POLICY` fix is smaller still, the plan is to try the interim
+Referer-Policy fix first as a quick, low-risk first attempt, then proceed with the
+MapTiler migration regardless of whether it resolves the professor's case, since it
+doesn't cover the general-`403`/User-Agent branch either way.
 
 **Fix**: swap to **MapTiler** (same `L.tileLayer()` call shape, different URL + API
 key). Verified against professor-confirmed scale (20-50 non-concurrent users):
 MapTiler's free tier is 5,000 map-sessions/month (session-based — panning within a
-session is free), no non-commercial restriction. Compared against Stadia Maps
-(200,000 credits/month but explicitly non-commercial-use-only — disqualifying) and
-Thunderforest (150,000 tile-requests/month). Even a generous estimate (~25k
-tile-equivalents/month) leaves 6-10x headroom on all three; MapTiler chosen for the
-session-based accounting plus no non-commercial restriction to verify against the
-university's status.
+session is free). **Correction (2026-09-16, see below): MapTiler's free tier is
+NOT restriction-free — it is explicitly limited to non-commercial use + R&D for
+commercial products, per MapTiler's own Cloud ToS (verified directly, not assumed).
+This line originally claimed the opposite; wrong when written.** Not a blocker in
+practice — the professor has since explicitly confirmed non-commercial status
+(§2026-09-16 below) — but the earlier "no restriction" framing was incorrect and
+should not be relied on if the project's status ever changes. Compared against
+Stadia Maps (200,000 credits/month but explicitly non-commercial-use-only —
+disqualifying) and Thunderforest (150,000 tile-requests/month). Even a generous
+estimate (~25k tile-equivalents/month) leaves 6-10x headroom on all three; MapTiler
+chosen for the session-based accounting, with eligibility now resting on the
+professor's confirmed non-commercial status rather than an absence of restriction.
 
 **Implementation checklist — beyond just getting a MapTiler (or similar) account +
 API key** (verified this session: Leaflet 1.9.4 loaded via CDN in `templates/base.html`,
@@ -126,11 +200,14 @@ grep, so no CSP whitelist step needed):
 1. Add the key as an env var (`env("MAPTILER_API_KEY")` in `webibex/settings.py`,
    following the exact pattern already used for `AWS_ACCESS_KEY_ID` etc.) — set it
    in Railway's env vars for prod, and in local `.env`/`.env.local` for dev.
-2. Since the 6 templates each inline their own `<script>` block (no shared JS
-   include), the key needs to reach all 6 — cleanest is a Django context processor
-   injecting `MAPTILER_API_KEY` into every template context, rather than threading
+2. The 6 inline-script templates each duplicate their own `<script>` block (no
+   shared JS include); `region_create.html` is the exception, already using a
+   shared JS file (`region_create.js`). Either way, the key needs to reach all
+   7 surfaces — cleanest is a Django context processor injecting
+   `MAPTILER_API_KEY` into every template context, rather than threading
    it through each view's render call individually.
-3. Update the tile URL + attribution string in all 6 templates. **Attribution is
+3. Update the tile URL + attribution string in all 7 surfaces (6 templates +
+   `region_create.js`). **Attribution is
    not a straight swap** — MapTiler's ToS requires its own attribution alongside
    OSM's (not just the current OSM-only copyright line) — confirm the exact
    required wording against MapTiler's current ToS at implementation time, don't
@@ -152,6 +229,117 @@ grep, so no CSP whitelist step needed):
 - Trigger: not urgent at current scale (6-10x headroom), but should happen before
   OSMF actually throttles/blocks — no fixed deadline, just don't let it linger
   indefinitely.
+
+### Map-provider architecture and business confirmation (2026-09-16) — design only, nothing implemented
+
+**Professor's own confirmation, received this session (`tmp/main_conferma_aspetticommerciali.md`)**:
+a direct incarico (~€20,000 total, covering both app maintenance and new
+individual-recognition models) is being arranged via the university's segreteria;
+administrative procedure for an EU-funded project still being checked. On maps
+specifically, she's fine keeping OSM (planning an ad-block-removal notice — her own
+framing conflates OSM's actual exposure, which is the Tile Usage Policy/rate-limit
+risk on webibex's own server-side calls, not individual visitors' ad-blockers; the
+distinction was raised with her, not yet reconciled in her reply), open to switching
+if it's not complex, and wants to stay on a free-tier provider regardless. **She
+explicitly, unprompted, confirmed the app will not become a commercial product** —
+directly relevant to the MapTiler correction above. Project/geographic decision
+still deferred on her side, no update.
+
+**Current implementation, re-confirmed by direct grep this session**: tile URL,
+`maxZoom`, and `attribution` are hardcoded identically in all 8 call sites — the 7
+templates already named in the implementation checklist above, plus
+`static/js/region_create.js` (and its `staticfiles/` collected-static duplicate) —
+zero env var or settings involvement anywhere. No change from the state this doc's
+MapTiler section already described; confirming it wasn't quietly fixed elsewhere.
+
+**Revised design, supersedes a straight MapTiler swap — switchable provider,
+not a hardcoded replacement**:
+- A server-side env var (`MAPTILER_API_KEY` etc., one per supported provider) sets
+  the deployed default, resolved in `webibex/settings.py` and injected into every
+  template via the context processor already planned in the checklist above.
+- A `?source=<ProviderName>` query-string parameter, read client-side via plain
+  `URLSearchParams(window.location.search)`, overrides the provider **name** only
+  for that page load. **The raw API key must never travel through the query
+  string** — access-log exposure (Railway/gunicorn logs the full request line,
+  query string included) and `Referer`-header leakage on any cross-origin request
+  are both real, avoidable risks. Each supported provider's key stays server-side
+  as its own env var; `?source=` only selects which already-resolved key gets
+  rendered into the page.
+- Considered (not adopted): the `leaflet-providers` plugin, the mechanism a public
+  reference implementation (`github.com/trincadev/samgis-be`, now archived) uses
+  for this exact pattern. Decided against — its provider catalog (dozens of
+  presets) is overkill for the 2-4 providers webibex actually needs; a small
+  hand-rolled `{name: {url, attribution, maxZoom, ...}}` config gets the same
+  `?source=` + env-var-default behavior without the dependency.
+- This also forces the 8-copy tile-layer duplication (confirmed above) into one
+  shared JS module referenced by all 7 templates — a cleanup that was going to be
+  needed for the MapTiler swap regardless, now shared across every provider.
+
+**Two more providers evaluated alongside MapTiler, verified against their own
+current docs this session (not from memory)**:
+- **Mapbox**: `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token={apiKey}`,
+  `tileSize: 512`, `zoomOffset: -1`, `maxZoom: 22`. Free tier is **volume-based**
+  (50,000 map loads/month, generally usable commercially up to that), with narrow
+  purpose-specific carve-outs (business intelligence/analytics, real estate,
+  vehicle-tracking) needing a separate paid license regardless of volume — webibex's
+  actual use doesn't fall in those categories. **Attribution requirement is
+  stricter than MapTiler/OSM**: Mapbox's ToS requires a *visible logo* on the map,
+  not just a text-attribution link, plus a mandatory third link ("Improve this
+  map") to their feedback tool — a real UI element to add, not just a string, if
+  Mapbox is chosen.
+- **HERE**: `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/jpeg?size=256&style=explore.day&apiKey={apiKey}`,
+  `maxZoom: 18`, attribution `&copy; HERE Technologies`. Freemium plan **explicitly
+  permits commercial use**; limits are request/rate quotas only, no purpose
+  restriction.
+- Neither is free the way OSM/MapTiler are — both require account signup + an API
+  key regardless of tier, no anonymous free tier at all. Worth naming if raised
+  with the professor given her stated free-tier preference.
+- Commercial-use classification is **provider-specific and independent of who
+  holds the API key** — verified this session, not assumed: MapTiler restricts by
+  purpose (free tier is non-commercial-only, full stop, regardless of account
+  holder), Mapbox mostly by volume with narrow purpose carve-outs, HERE purely by
+  volume. Whoever's account the key lives under changes who is contractually bound
+  by that provider's ToS, not which classification applies.
+
+**New feature raised, not yet scoped or built — client-side bring-your-own-key
+on an account page**:
+- Idea: let a logged-in user paste their own MapTiler/Mapbox/HERE key on their
+  account page, so their own map traffic counts against their own quota instead of
+  webibex's shared key. Persisted in `localStorage` only — **must never reach the
+  Django backend at all**, which also means it never appears in webibex's own
+  webserver logs.
+- Implementation constraint that actually matters: the input **must not be inside
+  a Django-posting `<form>`** (a `ModelForm`-style field would silently defeat the
+  whole design by submitting the key to `request.POST` on save) — a standalone
+  `type="button"` + JS `localStorage.setItem(...)` handler, no `name` attribute
+  reaching Django.
+- Field should be `<input type="password">`, without `autocomplete="off"` (widely
+  ignored by password managers anyway, and can actively hurt pickup) — this is
+  what makes the browser/OS password manager offer to save and autofill it. That
+  password manager then becomes the user's own cross-device sync layer for this
+  secret (webibex deliberately doesn't sync it) — autofill on a new device writes
+  it into that device's own `localStorage`; worth one line of UI copy saying so,
+  since "account page" otherwise implies server-side persistence this design
+  deliberately avoids.
+- **Residual-risk warning planned for the account-page UI, scoped correctly**:
+  `localStorage` is isolated by the same-origin policy — another tab/origin
+  cannot read it, so "keep webibex the only open tab" is not a real mitigation
+  (checked directly against OWASP, not assumed). The actual exposure is an XSS
+  vulnerability *within webibex's own page* — OWASP's own wording: *"the
+  JavaScript that an attacker injects via XSS runs on the same origin as the rest
+  of the browser application code. With a single XSS an attacker would be able to
+  extract all the data from the storage."* Mitigated by keeping webibex itself
+  free of XSS (the CVE/Django/pillow remediation work already tracked in this
+  doc), not by browser hygiene — the warning copy should say that plainly.
+  Recommend also telling users to restrict their own key by domain in their
+  provider's dashboard (the mechanism these providers actually intend for
+  client-exposed keys, not secrecy).
+- Not scoped for implementation yet — logged here so the design isn't lost before
+  the switchable-provider work above lands.
+
+- Trigger: none yet — this section is a design discussion following up the
+  MapTiler section above, not a committed plan. Revisit once the provider decision
+  (OSM vs. MapTiler vs. something else) is actually made with the professor.
 
 ### Auto-match-or-new-ID requirement (CR-1) — fully already built (corrected 2026-07-31)
 

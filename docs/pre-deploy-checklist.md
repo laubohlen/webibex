@@ -14,34 +14,39 @@ Postgres, Backblaze B2, RunPod inference.
 
 ## TODO — release blockers, must land before the professor sees this build
 
+**Update 2026-09-10: pushed to `origin` (github.com/laubohlen/webibex) and
+deployed** — `main` fast-forwarded to `b28982e` (adds the item-1
+identification-tab fix on top of everything already committed), pushed,
+Railway build completed, deploy confirmed live. Author's own words: "it
+seems ok, but I will revise this evening" — treat the items below as
+deployed, not yet re-verified live one-by-one (§4-§6 still need the
+Railway-dashboard/curl checks this evening).
+
 Concrete "not just committed locally" items. Pushing to `origin_gitlab`
 (the GitLab mirror, `git@gitlab.com:aletrn/webibex.git`) does **not**
 satisfy this — confirmed 2026-08-14: that push landed (mirror now 1 commit
-behind), but `origin` (`git@github.com:laubohlen/webibex.git`, the repo
-Railway almost certainly builds from) is still **39 commits behind,
-unchanged**. Nothing below is live until it reaches `origin`.
+behind), but `origin` was still 39 commits behind as of that date. Resolved
+2026-09-10 (see update above).
 
-- [ ] **Push local `main` to `origin` (github.com/laubohlen/webibex)**, not
-      just the GitLab mirror — see §0 below for the access/trigger caveats.
-- [ ] **Delete-menu-option fix** (`3d5168d`, guards the Tools-menu Delete
+- [x] **Push local `main` to `origin` (github.com/laubohlen/webibex)**,
+      not just the GitLab mirror — done 2026-09-10.
+- [x] **Delete-menu-option fix** (`3d5168d`, guards the Tools-menu Delete
       crash and hides the option until real semantics are decided) —
-      committed locally, confirmed correct by the professor 2026-08-08, but
-      not deployed. Currently-live code (whatever's on `origin`/Railway
-      today) still has the unguarded crash.
-- [ ] **Already-fixed dependency CVEs** (Django 5.0.14→5.2.16, pillow,
+      confirmed correct by the professor 2026-08-08, deployed 2026-09-10.
+- [x] **Already-fixed dependency CVEs** (Django 5.0.14→5.2.16, pillow,
       django-allauth, django-filer, lxml, requests, setuptools — commit
-      `480607b` and later) — done locally, not deployed. Currently-live
-      production is still running the pre-bump, CVE-exposed versions.
+      `480607b` and later) — deployed 2026-09-10.
 - [ ] **Still-open critical dependency risk, decide before shipping**:
       `urllib3==1.26.20` (CRITICAL, multiple open CVEs) / `boto3==1.26.0` /
       `botocore==1.29.165` — deliberately pinned old for Backblaze B2
       compatibility, blocked on a dedicated B2 test bucket, genuinely not
-      fixed anywhere (local or deployed). Either accept explicitly for this
-      release or treat as a hard blocker — don't let it ship as an
-      unexamined default.
-- [ ] Auth/session hardening settings (`SESSION_COOKIE_SECURE` etc.,
-      `webibex/settings.py`, 2026-07-25) — same story, done locally, not on
-      `origin`/Railway yet.
+      fixed anywhere. Unchanged by the 2026-09-10 deploy — these old,
+      vulnerable pins are now live in production as-is. Either accept
+      explicitly for this release or treat as a hard blocker — don't let it
+      ship as an unexamined default.
+- [x] Auth/session hardening settings (`SESSION_COOKIE_SECURE` etc.,
+      `webibex/settings.py`, 2026-07-25) — deployed 2026-09-10; live
+      verification (curl for HSTS header) still pending, see §6.
 - [x] **Unauthenticated-reachable views** (found 2026-08-14, full detail in
       `security-remediation-plan.md`'s IDOR section): `save_landmarks_view`,
       `results_over_view`, `default_chip_compare_view`,
@@ -100,8 +105,8 @@ unchanged**. Nothing below is live until it reaches `origin`.
       user — this repo has no `VERSION` file or `pyproject.toml` yet (only
       `requirements.txt`); a proper `pyproject.toml` (which would carry a
       `[project.version]`) is planned as separate future work, not part of
-      this fix. Still not pushed to `origin` — see the blocker note at the
-      top of this section.
+      this fix. Pushed to `origin` and deployed 2026-09-10 — see the update
+      note at the top of this section.
 
 ## 0. Push to origin (webibex-specific — do this check first)
 
