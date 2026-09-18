@@ -263,12 +263,13 @@ def smoke_scenario(
 # ---------------------------------------------------------------------------
 # T27 -- URL discovery.
 # ---------------------------------------------------------------------------
-def test_discover_url_names_finds_all_26_first_party_names_excludes_third_party():
+def test_discover_url_names_finds_all_27_first_party_names_excludes_third_party():
     discovered = discover_url_names()
 
-    assert len(discovered) == 26
+    assert len(discovered) == 27
     assert "welcome" in discovered
     assert "update-image" in discovered
+    assert "health" in discovered
     # allauth-owned (mounted under the excluded "accounts/" prefix).
     assert "account_login" not in discovered
     # DEBUG-only (settings.DEBUG is False under ENVIRONMENT=test).

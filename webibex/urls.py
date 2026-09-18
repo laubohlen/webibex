@@ -29,6 +29,7 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("filer/", include("filer.urls")),
     path("", welcome_view, name="welcome"),
+    path("health/", health_view, name="health"),
     path("identification/", images_overview, name="images-overview"),
     path("upload/", image_upload, name="upload-images"),
     re_path(r"^image/(?P<oid>[0-9]+)/$", image_read, name="read-image"),

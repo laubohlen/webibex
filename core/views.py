@@ -1,7 +1,10 @@
+import os
+
+import django
 import numpy as np
 
 from django.conf import settings
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Q, Case, When
@@ -18,6 +21,19 @@ from simple_landmarks.models import LandmarkItem, Landmark
 
 def welcome_view(request):
     return render(request, "core/welcome.html")
+
+
+def health_view(request):
+    # Liveness + deployed-version probe -- no DB/B2/RunPod calls, no auth.
+    # RAILWAY_GIT_COMMIT_SHA is auto-populated by Railway on deploys from a
+    # connected GitHub repo; absent locally/in tests, hence the fallback.
+    return JsonResponse(
+        {
+            "status": "ok",
+            "commit": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "unknown"),
+            "django": django.get_version(),
+        }
+    )
 
 
 @login_required
