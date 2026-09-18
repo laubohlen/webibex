@@ -1,0 +1,48 @@
+diff --git a/templates/core/animal_overview.html b/templates/core/animal_overview.html
+index f12b75d..0856e93 100644
+--- a/templates/core/animal_overview.html
++++ b/templates/core/animal_overview.html
+@@ -50,7 +50,10 @@
+                 </tr>
+                 {% for animal in observed_animals %}
+                 <tr>
+-                    <td><a href="{% url 'animal' oid=animal.id %}">{{ animal.id_code }}</a></td>
++                    <td>
++                        <a href="{% url 'animal' oid=animal.id %}">{{ animal.id_code }}</a>
++                        <a href="{% url 'animal-own-images' oid=animal.id %}" class="text-xs text-gray-500">(mine)</a>
++                    </td>
+                     <td>{{ animal.name }}</td>
+                     <td>{{ animal.sex }}</td>
+                     <td>{{ animal.cohort }}</td>
+diff --git a/tests/core/test_views_smoke.py b/tests/core/test_views_smoke.py
+index bb99e3b..9d4ba16 100644
+--- a/tests/core/test_views_smoke.py
++++ b/tests/core/test_views_smoke.py
+@@ -422,6 +422,27 @@ def test_animals_overview_identified_animal_is_observed_and_rendered(
+     assert "PARITY01" in response.content.decode()
+ 
+ 
++# Standby for demo (parked pending professor input, see
++# tmp/domanda-professore-animal-own-images.md) -------------------------
++@pytest.mark.django_db
++def test_animals_overview_links_to_own_images_for_observed_animal(
++    client, user_factory, animal_factory, ibex_image_factory
++):
++    """The owner-scoped 'view my own photos of this animal' page
++    (animal_images_owner_view) lost its only entry point when the
++    Identification tab's duplicated animal listing was removed. Guards
++    that the Animals tab provides a working replacement entry point."""
++    user = user_factory(username="mine_link_user")
++    animal = animal_factory(id_code="MINELNK1")
++    ibex_image_factory(owner=user, name="mine_link_img", animal=animal)
++    client.force_login(user)
++
++    response = client.get(reverse("animals"))
++    own_images_url = reverse("animal-own-images", kwargs={"oid": animal.id})
++
++    assert own_images_url in response.content.decode()
++
++
+ # T13 -------------------------------------------------------------------
+ @pytest.mark.django_db
+ def test_results_over_view_shows_only_identified_images(

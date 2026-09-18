@@ -1080,13 +1080,25 @@ template now has **no entry point at all** — same category as `rerun_view`
 above. `animal_images_owner_view` and its template still work correctly if
 reached directly by URL; there's just no in-app link to it anymore.
 Decision pending (tracked alongside the region/project question already
-put to the professor, `tmp/domanda-professore-region-project.md`): is
+put to the professor, `tmp/domanda-professore-region-project.md`, and the
+dedicated question `tmp/domanda-professore-animal-own-images.md`): is
 "view just my own photos of this animal" (as distinct from the global
 per-animal view, already reachable via Animals and Results tabs) a wanted
-feature? If yes, restore access with a small link on the Animals tab
-(drafted and reverted this session — trivial to reapply). If no, delete
-`animal_images_owner_view`, its route, and its template as genuine dead
-code.
+feature? If yes, restore access with a small link on the Animals tab. If
+no, delete `animal_images_owner_view`, its route, and its template as
+genuine dead code.
+
+**Professor confirmed (2026-09-19): park it** — no decision either way yet,
+revisit later. The candidate fix (Animals-tab `(mine)` link + a guarding
+test) was drafted in-tree across an earlier session, sat uncommitted, and
+was saved out as `docs/patches/2026-09-19-animal-own-images-mine-link-DRAFT.patch`
+then reverted from the working tree (verified via `git apply --check
+--reverse` before reverting, so the patch is confirmed to exactly restore
+this state) — repo now clean rather than carrying an indefinitely-parked
+uncommitted diff. Re-apply with `git apply
+docs/patches/2026-09-19-animal-own-images-mine-link-DRAFT.patch` whenever
+the professor actually says yes; delete the patch file if she says no
+instead.
 
 **Decision: full planning-TDD pipeline, not a direct patch** — the diff
 itself is mechanical (6 one-line additions, an already-established pattern),
