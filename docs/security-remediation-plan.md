@@ -157,6 +157,25 @@ confirmed which specific sub-trigger fired locally (would need to inspect the
 actual failed request's headers in devtools); noted as a real open question, not
 assumed to be identical to the professor's case.
 
+**Manually verified (2026-09-18)**: `/region/1/` tested in Firefox with
+NoScript + uBlock Origin enabled — the exact hardened config that
+previously reproduced the *general* `403` (misidentification) tile, not
+just the `403r` case this fix targets. No error tile of either kind after
+the fix. Better result than expected: the doc's own fix-priority analysis
+above predicted this fix would NOT help the general-`403` bucket (driven
+by extension/browser UA behavior, not Referer) — worth re-checking why it
+resolved anyway before assuming this generalizes (single manual
+observation, not re-tested against the original failure conditions).
+
+**Interim fix applied (2026-09-18)**: `webibex/settings.py` now sets
+`SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"` unconditionally
+(not gated to production like the other hardening settings — no HTTP-breakage
+risk, and it fixes local-dev map testing too). 6 regression tests added to
+`tests/webibex/test_settings_security_hardening.py` (present under ambient
+`ENVIRONMENT=test`, production, and development). Does not resolve the
+general/misidentification `403` bucket or client-side Referer stripping by
+extensions/AV — MapTiler migration (below) remains the structural fix.
+
 **Fix priority, given the reproduction**: a compliant `SECURE_REFERRER_POLICY` is a
 cheap interim mitigation worth trying first — it's the one change actually within
 webibex's control, and standard/default browsers (no extensions) currently omit
@@ -428,6 +447,67 @@ supply-chain webibex update"). See `agents_writer` project memory
 (`docs/session-notes-2026-07-07-webibex-ibex-security-plan.md` in `agents_writer`) for
 the full research trail (MegaDescriptor/wildlife-tools backbone comparison, horn-tip wear
 literature, muzzle-recognition precedent, near-duplicate augmentation risk).
+
+## Unused vulnerable dependency: `pillow_heif==0.22.0` — REMOVED (2026-09-18)
+
+Prompted by a Hacktron writeup the user surfaced (`tmp/hacking-openai.txt`,
+"Hacking OpenAI" — a heap buffer overflow in `libheif` v1.19.7, chained
+through ImageMagick/Discourse's HEIC image-upload pipeline, to RCE and an
+OpenAI SSO account takeover; fixed upstream at `libheif` v1.23.4).
+
+Checked whether webibex was exposed to the same decoder-in-an-upload-path
+pattern, since `requirements.txt` had `pillow_heif==0.22.0` pinned (present
+since at least three prior version bumps: 0.16.0 → 0.18.0 → 0.22.0, per
+`git log -p -- requirements.txt`). Confirmed directly in the project venv:
+`pillow_heif.libheif_version()` → **`1.19.7`** — the exact vulnerable
+version named in the writeup.
+
+**Confirmed unreachable, not an active RCE**: a full-repo grep (`.py`,
+`.html`, `.js`, not just `core/`) for `heif`/`.heic` found zero references
+anywhere. `pillow_heif.register_heif_opener()` (required for Pillow to route
+through it) was never called, and `load_image()` (`core/utils.py:66-71`)
+uses `cv2.imread()`, which wouldn't dispatch to it regardless. The package
+was dead weight, mechanically re-pinned across past CVE-bump commits without
+anyone using or auditing it — same blind-bump pattern flagged elsewhere in
+this doc.
+
+**Action taken**: removed the unused pin from `requirements.txt` entirely,
+rather than bumping it — `708 tests collected` cleanly afterward, confirming
+nothing imports it. Closes the supply-chain liability now instead of leaving
+a live-RCE-class dependency sitting in the tree for whenever someone next
+wires it in without checking the version.
+
+**Correction to this doc's own earlier advice**: the HEIC/AVIF `load_image()`
+`None`-decode gap (flagged under "TODO — add debug/observability logging at
+high-risk boundaries", B5, still deferred) is real, but `pillow_heif` is
+**not** a safe fix for it as currently pinned anywhere in this repo's history.
+If HEIC upload support is ever implemented, it must pin a `pillow_heif`
+release bundling a patched `libheif` (verify via
+`pillow_heif.libheif_version()` >= 1.23.4 before wiring in, not by version
+number alone — PyPI's `pillow-heif` package page doesn't state the bundled
+`libheif` version), and per the writeup's own defense-in-depth
+recommendation, consider sandboxing/resource-limiting the decode path since
+image-format decoders are a recurring memory-safety vulnerability class.
+
+- Trigger: whenever HEIC/iPhone upload support is actually scoped (raised
+  2026-09-18, not yet a committed feature — see conversation this session).
+
+**Manually verified against production (2026-09-18)**: a real iPhone HEIC
+photo, uploaded via Safari to `wibex.up.railway.app`, arrived server-side
+already converted -- confirmed `.jpeg` extension shown post-upload, image
+displayed correctly in the app. Safari's client-side HEIC->JPEG conversion
+on `<input type="file">` uploads (not something webibex controls) means
+the common case never reaches `load_image()`'s `None`-decode gap or would
+ever need `pillow_heif` server-side. Confirms the removal above is safe
+for the current, near-exclusively-iPhone-Safari user base.
+
+**Residual scope, not yet a problem**: this only covers Safari-on-iPhone.
+Any other route to the same upload endpoint -- a non-Safari browser (e.g.
+a future EU DSA-mandated alternative iOS browser engine), an in-app
+WebView, or a manually-attached pre-existing `.heic` file instead of a
+live camera-roll pick -- could still land raw HEIC bytes server-side and
+hit the same crash. Not scoped or fixed; revisit if/when the user base's
+browser mix actually changes.
 
 ## TODO — Railway deployment hardening (not started, 2026-07-23)
 

@@ -125,3 +125,28 @@ def test_hardening_settings_absent_under_environment_development(reload_settings
 
     for name in SECURITY_HARDENING_SETTINGS:
         assert not hasattr(reloaded, name)
+
+
+# SECURE_REFERRER_POLICY -----------------------------------------------------
+# Interim mitigation for the OSM tile `403r` error (Referer header stripped
+# by Django's "same-origin" default) -- see docs/security-remediation-plan.md,
+# "OpenStreetMap ToS exposure (CR-2)". Unlike SECURITY_HARDENING_SETTINGS
+# above, this is set unconditionally (no HTTP-breakage risk), so it must be
+# present in every environment, not just production.
+def test_referrer_policy_set_under_ambient_environment_test():
+    assert webibex.settings.SECURE_REFERRER_POLICY == "strict-origin-when-cross-origin"
+
+
+def test_referrer_policy_set_under_environment_production(reload_settings_env):
+    reloaded = reload_settings_env(
+        ENVIRONMENT="production",
+        DATABASE_URL="sqlite://:memory:",
+        EMAIL_ADRESS="test@example.invalid",
+        EMAIL_HOST_PASSWORD="test-email-password",
+    )
+    assert reloaded.SECURE_REFERRER_POLICY == "strict-origin-when-cross-origin"
+
+
+def test_referrer_policy_set_under_environment_development(reload_settings_env):
+    reloaded = reload_settings_env(ENVIRONMENT="development")
+    assert reloaded.SECURE_REFERRER_POLICY == "strict-origin-when-cross-origin"

@@ -45,6 +45,12 @@ ALLOWED_HOSTS = ["wibex.up.railway.app", "127.0.0.1", "localhost:8000"]
 
 CSRF_TRUSTED_ORIGINS = ["https://wibex.up.railway.app"]
 
+# Django's default ("same-origin") strips the Referer header on cross-origin
+# tile requests to OSM, triggering OSM's "403r: Referer is required" error
+# tile. Not gated to production -- no HTTP-breakage risk like the cookie/SSL
+# settings below, and fixes local-dev map testing too.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
 if ENVIRONMENT == "production" or POSTGRES_LOCALLY:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
