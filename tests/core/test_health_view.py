@@ -2,7 +2,6 @@
 (core/views.py:health_view) -- see docs/security-remediation-plan.md.
 """
 
-import django
 from django.urls import reverse
 
 
@@ -13,8 +12,15 @@ def test_health_view_returns_200_with_expected_shape(client):
     assert response["Content-Type"] == "application/json"
     body = response.json()
     assert body["status"] == "ok"
-    assert body["django"] == django.get_version()
     assert "commit" in body
+
+
+def test_health_view_does_not_leak_django_version(client):
+    # Regression guard: an unauthenticated framework-version leak makes CVE
+    # targeting easier -- must never come back.
+    response = client.get(reverse("health"))
+
+    assert "django" not in response.json()
 
 
 def test_health_view_falls_back_to_unknown_commit_without_railway_env(

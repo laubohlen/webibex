@@ -2525,3 +2525,22 @@ maintenance/freshness decision.
 - Trigger: none yet — revisit if/when frontend modernization is explicitly
   prioritized, or if `tailwindcss@3.4.x` itself is ever deprecated/EOL'd
   upstream (not currently the case).
+
+## `/health/` endpoint leaked Django version — FIXED (2026-09-19)
+
+The `/health/` endpoint added in `70a14cb` (documented in
+`docs/changes/2026-09-19-referrer-policy-heic-removal-health-endpoint.md`,
+already committed/pushed — that CR doc is a historical record and is not
+being retroactively edited) returned `django.get_version()` in its
+unauthenticated JSON response. Flagged by the user directly after that
+commit landed: an unauthenticated framework-version disclosure makes CVE
+targeting easier (an attacker can immediately narrow to known
+vulnerabilities for that exact Django version without any other probing).
+
+**Fix**: removed the `"django"` field and the now-unused `import django`
+from `core/views.py::health_view`. Response shape is now just `{"status":
+"ok", "commit": <sha-or-"unknown">}`. `tests/core/test_health_view.py`
+updated: removed the assertion on the `django` field, added a dedicated
+regression guard (`test_health_view_does_not_leak_django_version`)
+asserting `"django" not in response.json()` so this can't silently
+reappear.

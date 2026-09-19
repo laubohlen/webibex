@@ -1,6 +1,5 @@
 import os
 
-import django
 import numpy as np
 
 from django.conf import settings
@@ -27,11 +26,12 @@ def health_view(request):
     # Liveness + deployed-version probe -- no DB/B2/RunPod calls, no auth.
     # RAILWAY_GIT_COMMIT_SHA is auto-populated by Railway on deploys from a
     # connected GitHub repo; absent locally/in tests, hence the fallback.
+    # Deliberately excludes the Django version -- an unauthenticated
+    # framework-version leak makes CVE targeting easier.
     return JsonResponse(
         {
             "status": "ok",
             "commit": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "unknown"),
-            "django": django.get_version(),
         }
     )
 
