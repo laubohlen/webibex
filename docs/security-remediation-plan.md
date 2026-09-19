@@ -1360,7 +1360,7 @@ this session — `uv pip uninstall`'d now. Full suite re-confirmed green (706
 passed) with it genuinely absent, not just unlisted.
 
 **Unused-dependency sweep (custom check, not a built-in skill step)**:
-cross-referenced every one of the 34 `requirements.txt` + 10
+cross-referenced every one of the 35 `requirements.txt` + 10
 `requirements-dev.txt` entries against (a) direct Python imports, (b)
 Django string-path references (`INSTALLED_APPS`/`MIDDLEWARE`/`STORAGES`),
 (c) CLI/plugin-only tools invoked outside Python (`gunicorn` via `Procfile`,
@@ -1419,8 +1419,58 @@ via crafted `sourceMappingURL`), `micromatch@4.0.7`/`picomatch@2.3.1`
 `postcss-selector-parser@6.1.1` (DoS via AST recursion). All transitive-only
 under `tailwindcss`/`clean-css-cli`'s own toolchains — confined to
 build-time-only tooling per this doc's existing JS-side classification,
-never reachable from the deployed app. Fix path: `npm update`/regenerate
-`node/package-lock.json` next time `node/` is touched — routine, not urgent.
+never reachable from the deployed app. **Superseded below** — the
+`npm update`/regenerate-lockfile fix path described here is no longer
+possible (npm is disabled, `node/package-lock.json` is deleted); see
+the RESOLVED note immediately following.
+
+**JS transitive CVEs — RESOLVED (2026-09-19)**: the 10-package finding
+above (`brace-expansion`, `minimatch`, `cross-spawn`, `glob@10.4.5`,
+`nanoid`, `postcss@8.4.39`, `micromatch`/`picomatch`, `yaml@2.4.5`,
+`postcss-selector-parser`) is fixed. `npm` remains permanently disabled by
+this devcontainer image's `npm-guard` policy (no runtime override), and
+`pnpm audit` still refuses an npm-format lockfile directly, so the fix path
+was: `pnpm import` (converts `node/package-lock.json` → `node/pnpm-lock.yaml`,
+required whitelisting `registry.npmjs.org` again via `temp-egress`, same as
+the 2026-09-18 audit) → `pnpm update` (resolved all transitive deps to
+patched versions within the existing exact-pinned `tailwindcss@3.4.6`/
+`clean-css-cli@5.6.3` ranges — neither direct dep needed a bump). This
+re-resolved the tree, not just bumped patch versions — worth knowing before
+assuming "same shape, newer versions": `glob` moved from `10.4.5` to
+`7.2.3` (a major *downgrade*, since pnpm's resolver picked a different
+transitive path), `cross-spawn` dropped out of the tree entirely, and the
+total package count went from 121 to 89. `pnpm audit` now reports **0
+vulnerabilities**, and every flagged CVE package landed on a patched
+version (`brace-expansion@1.1.21`, `minimatch@3.1.5`, `nanoid@3.3.19`,
+`postcss@8.5.28`, `micromatch@4.0.8`, `picomatch@2.3.2`, `yaml@2.9.1`,
+`postcss-selector-parser@6.1.4`). Verified no functional regression: both
+`pnpm exec tailwind build` and `pnpm exec cleancss` against the
+pnpm-resolved `node_modules` produced output **byte-identical** to the
+current on-disk `static/css/style.css`/`style.min.css` (these two files
+are themselves gitignored, never committed — only their `staticfiles/`
+collectstatic output is tracked).
+
+**Tooling change**: `node/package-lock.json` (npm-format) retired in favor of
+`node/pnpm-lock.yaml` — npm cannot run in this devcontainer at all, and pnpm
+is the sanctioned substitute per the existing `pnpm audit` note above; keeping
+an unusable npm lockfile around was misleading. `.pnpm-store/` and
+`node/.devcontainer-guard-install.lock` (pnpm/devcontainer-guard local
+artifacts) added to `.gitignore`.
+
+**New finding, found and fixed this session**: `node/node_modules` (960
+files) was tracked in git — confirmed via `git ls-files node/node_modules`,
+dating to the original developer's first tailwind-setup commit (`a369d0d`,
+2024-07-24, predating the `node/node_modules` `.gitignore` line, which never
+retroactively untracks already-committed files). This mattered for the fix
+above, not just hygiene: as long as the vulnerable npm-installed tree stayed
+committed, anyone checking out the repo without reinstalling would still get
+the old vulnerable code regardless of `pnpm-lock.yaml` being fixed. Resolved
+via `git rm -r --cached node/node_modules` (user-run — `--cached` untracks
+without touching the working tree; the earlier plain `rm -r`/`git rm -r`
+attempt correctly failed since pnpm's tree has local modifications vs. the
+committed npm-shaped snapshot). Re-verified after untracking: `pnpm exec
+tailwind build` / `pnpm exec cleancss` output still byte-identical to the
+current on-disk `static/css/style.css`/`style.min.css`.
 
 **socket.dev cross-check** (ran via a scratchpad copy of
 `~/.claude/skills/supply-chain/scripts/socket-check.py` — the skill's own
@@ -1437,10 +1487,10 @@ cross-check, not just a repeated query. Also surfaced non-security
 `function-bind`/`hasown`/`is-core-module`/`path-parse`/`object-assign` —
 informational only.
 
-**Typosquat / yanked / dependency-confusion checks**: all PASS. All 44
+**Typosquat / yanked / dependency-confusion checks**: all PASS. All 45
 Python + 2 JS package names exact-match legitimate well-known packages
 (zero Levenshtein-1 hits against the top-50/top-30 lists); zero yanked
-releases across all 44 exact Python pins (live PyPI query); no
+releases across all 45 exact Python pins (live PyPI query); no
 `--extra-index-url`/private-registry mixing anywhere (`node/.npmrc` already
 sets `ignore-scripts=true`, matching this project's existing supply-chain
 convention).
@@ -2416,3 +2466,62 @@ mismatches for manual review.
   `process_horn_chip` orphan-file fix above (line ~1590) once that's
   scheduled, since fixing the leak and auditing the existing damage are
   naturally the same trip.
+
+## TODO — Tailwind CSS v3→v4 migration (evaluated, not scoped, 2026-09-19)
+
+Raised during the JS transitive-CVE fix session above, while checking
+whether pinning `tailwindcss@3.4.6` this old was itself a residual risk.
+It isn't: the package's own dependency tree, as actually resolved in
+`node/pnpm-lock.yaml`, has **zero** CVE/vulnerability findings (verified
+independently via both `pnpm audit` and a direct socket.dev alert-API
+query against all 89 resolved packages — the only "high"-bucketed socket
+alerts are 5 non-security `socketUpgradeAvailable` informational notices).
+`tailwindcss` itself, checked at both `3.4.6` and the latest `3.4.19`,
+has only low-severity behavioral alerts (filesystem/env access — normal
+for a CLI build tool) on socket.dev, no highs on either version. **No
+security motivation exists for bumping tailwindcss**, to `3.4.19` or to
+`4.x`.
+
+Evaluated whether to bump anyway (freshness), using Tailwind's own
+upgrade guide, saved at
+`docs/references/tailwindcss-v3-to-v4-upgrade-guide.txt`. Concluded a
+v3→v4 bump is **not a drop-in change for this project** — concrete,
+webibex-specific risks found by actually reading `node/tailwind.config.js`
+and `static/css/tailwind.css`, not just the generic guide:
+
+- `static/css/tailwind.css` uses v3-style `@tailwind base/components/utilities;`
+  directives — v4 requires `@import "tailwindcss";` instead.
+- **Real regression risk**: `node/tailwind.config.js`'s `safelist` (5 color
+  classes — `bg-emerald-400`/`bg-blue-400`/`bg-purple-400`/`bg-orange-400`/
+  `bg-slate-400` — with a comment explaining they're referenced from a
+  Python utils function, not scanned from any template) has **no direct
+  v4 equivalent**: v4 drops `safelist` from the JS config entirely,
+  requiring migration to the new `@source inline(...)` CSS syntax. Missing
+  this migration would silently drop those 5 dynamically-generated color
+  badges from the built CSS in production.
+- The custom `fontFamily` theme extension (`IBM Plex Mono`) needs
+  migrating to a CSS-native `@theme { --font-sans: ... }` block.
+- The Tailwind CLI moves to a separate `@tailwindcss/cli` package in v4 —
+  `node/package.json`'s `"tailwind"` build script needs updating, not
+  just the version pin.
+- Many utility classes are renamed/removed in v4 (`shadow-sm→shadow-xs`,
+  `ring→ring-3`, `outline-none→outline-hidden`, `flex-shrink-*→shrink-*`,
+  etc.) — every template needs reviewing, not just diffing; unlike this
+  session's transitive-dependency fix, the build output would **not** be
+  byte-identical after a v4 bump.
+- v4 raises the minimum supported browser floor to Safari 16.4+/Chrome
+  111+/Firefox 128+ — not yet checked against the actual user base's
+  (small trusted research group, ~20-50 non-concurrent users) browser mix.
+- Tailwind ships an official `npx @tailwindcss/upgrade` tool (requires
+  Node 20+ — this devcontainer has v22.23.2, fine) that automates most of
+  the mechanical changes; their own guidance is to run it on a separate
+  branch and manually review the diff + test in-browser before merging.
+
+**Decision**: not bundled into this session's CVE-fix commit. If pursued,
+scope as its own dedicated task (a `code-planner` pass given the concrete
+risks above, especially the safelist gap) — no security urgency, purely a
+maintenance/freshness decision.
+
+- Trigger: none yet — revisit if/when frontend modernization is explicitly
+  prioritized, or if `tailwindcss@3.4.x` itself is ever deprecated/EOL'd
+  upstream (not currently the case).

@@ -9,6 +9,8 @@ pg-data.json
 
 webibex.code-workspace
 node/node_modules
+node/.devcontainer-guard-install.lock
+.pnpm-store/
 static/css/style.css
 static/css/style.min.css
 prod/
