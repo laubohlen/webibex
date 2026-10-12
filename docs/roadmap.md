@@ -172,6 +172,10 @@ debug session (findings below; no code changed yet, both items still open).
    `query_season ± 4` (`views.py:178-186`, `201-202`) — a stale comment,
    same "what am I comparing against" complaint Alice raised.
 
+## Track: Attribution / Credits
+
+**Open**: add a copyright/credit line for Alessandro Trinca Tornidor after the existing Laurens Bohlen credit (LICENSE/README, exact file TBD). Lower priority, no rush: a proper ABOUT page crediting everyone who worked/will work on the project, not just a static credit line.
+
 ## Related but out of scope for all tracks above
 
 - `docs/changes/*.md` — individual completed-CR docs (what changed, why,
