@@ -29,8 +29,8 @@ Other checks:
 - Not checked: yanked/abandoned (PyPI/npm metadata 403), lifecycle-script scan (`lifecycle-scripts-check.py` unreadable), `requirements-dev.txt` CVEs.
 
 ## Reachability review (Opus subagent) — all NOT-REACHABLE in production
-- **Django/GeoDjango**: `django.contrib.gis` not in `INSTALLED_APPS` (`webibex/settings.py` ~L76-89); lat/lon are `FloatField` (`core/models.py:30-31,67-70`); grep for gis/GEOS/GDAL/postgis in first-party code and in filer/polymorphic/easy_thumbnails/allauth/storages found nothing.
-- **sqlparse**: no first-party import. Django 5.2.16 calls it in `base/operations.py:365-366` (`prepare_sql_script`; Postgres overrides at `postgresql/operations.py:193-194`), `sqlite3/introspection.py:189-237` (dev only), `test/runner.py:101` (`--debug-sql`). No `RunSQL` in repo migrations or in filer/allauth/easy_thumbnails/polymorphic.
+- **Django/GeoDjango**: `django.contrib.gis` not in `INSTALLED_APPS` (`webibex/settings.py:76-90`; `debug_toolbar` appended at :107); lat/lon are `FloatField` (`core/models.py:30-31,67-70`); grep for gis/GEOS/GDAL/postgis in first-party code and in filer/polymorphic/easy_thumbnails/allauth/storages found nothing.
+- **sqlparse**: no first-party import. Django 5.2.16 calls it in `base/operations.py:365-366` (`prepare_sql_script`; Postgres overrides at `postgresql/operations.py:193-194`), `sqlite3/introspection.py:189-237` and :281,:415,:435 (dev only), `test/runner.py:101` (`--debug-sql`). No `RunSQL` in repo migrations or in filer/allauth/easy_thumbnails/polymorphic.
 - **urllib3**: outbound HTTP only to `core/utils.py:247` (RunPod, env-set URL), `core/b2_utils.py` + django-storages (env-set `AWS_S3_ENDPOINT_URL`, Backblaze). `requests` handles redirects itself and strips `Authorization` cross-host. Conditional on no `HTTPS_PROXY` in the prod env (not visible).
 - **geopy**: only `core/utils.py:551` `distance()` on float tuples (`Point.from_sequence`, not `from_string`); user lat/lon strings (`core/views.py:550-551,573-574,593-594`) hit a `FloatField` before any geopy call.
 - **setuptools**: build-time advisory; project has no `setup.py`/`pyproject.toml`/`MANIFEST.in`, builds no sdists.
@@ -40,9 +40,12 @@ Reviewer could not see: Railway env vars (`HTTPS_PROXY`, `AWS_S3_ENDPOINT_URL`, 
 
 ## Upgrade constraints discovered
 - `django-polymorphic` 3.1.0 runs `import pkg_resources` on import (reported by the subagent). Whether setuptools 83 still ships `pkg_resources` is unverified; if not, bumping setuptools breaks `polymorphic` → `filer` → app. Same class as the 2026-08-15 prod-only import outage (see `CLAUDE.md`).
-- urllib3 2.x is blocked: botocore 1.29.165 caps urllib3 below 2 (subagent noted this for Python <3.10; exact constraint on 3.12 not checked). `boto3==1.26.0` is pinned deliberately because Backblaze rejects `x-amz-checksum-algorithm` (per subagent).
+- urllib3 2.x is blocked: botocore 1.29.165 caps urllib3 below 2 unconditionally (`Requires-Dist: urllib3 (<1.27,>=1.25.4)` in installed METADATA, no python-version marker; verified by fact-check, so the cap applies on prod's 3.12.5 too). `boto3==1.26.0` is pinned deliberately because Backblaze rejects `x-amz-checksum-algorithm` (per subagent).
 - Prior JS triage: commit `45f3746` (2026-09-19) resolved 31 JS transitive CVEs; the three JS findings above remain/are new in build-time tooling only.
 
 ## Decisions
 - No dependency changes made this session; waiting on contract signature before further work.
 - Upgrade order suggested by reachability (all low urgency): Django 5.2.17 → sqlparse 0.6.0 → geopy 2.5.0 → setuptools 83 (after the `pkg_resources` check) → pip → urllib3/boto3 as a separate B2-compatibility project.
+
+## Validation
+Sonnet fact-check 2026-10-12: pins, JS versions, file:line claims, Django internals and git facts confirmed; one hedge corrected (botocore cap). Not verified: advisory IDs/severities (OSV, offline), socket.dev results, setuptools 83 `pkg_resources` question, severity totals recount, `requests` cross-host `Authorization` stripping.
