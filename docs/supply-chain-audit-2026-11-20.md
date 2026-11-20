@@ -91,6 +91,8 @@ OSV query on the installed `.venv` versions of the 71 packages not in `requireme
 
 Not fixed: all four are outside `requirements.txt` and not installed on prod. Checked afterwards: `moto` 4.2.14 requires `cryptography >=3.3.1` and `werkzeug !=2.2.0,!=2.2.1,>=0.5` (no upper caps), so the installed versions are just what resolved when `.venv` was built, and upgrading them is not blocked by moto (whether 50.0.0 / 3.1.9 exist and pass the suite was not checked: PyPI returned 403). `msgpack` comes from `CacheControl`, which comes from `pip_audit` (installed in `.venv`, in neither requirements file); the origin of `filelock` is unknown (nothing requires it). A text search of the installed `moto` found no `pkcs7`/`EnvelopedData`/`safe_join` use, and the project's own code, tests and scripts import none of the four packages; this is not a full reachability analysis. Dev tools' transitive versions are not pinned, so this scan describes this `.venv` only.
 
+**Resolved in `.venv` (nothing committed, nothing pins these):** upgraded `cryptography` 49.0.0 → 50.0.2, `werkzeug` 3.1.8 → 3.1.9, `msgpack` 1.2.1 → 1.2.4, `filelock` 3.32.0 → 4.2.12 (all exist on PyPI, not yanked). `pip check` clean, `moto` still 4.2.14, suite 706 passed, 5 skipped, 1 xfailed, and a re-scan of the same 71 packages shows 0 OSV advisories. A fresh `pip install -r requirements-dev.txt` resolves whatever is newest at that time; pinning the dev tooling is a separate, undecided choice.
+
 ## Upgrade notes (checked 2026-11-20, PyPI metadata only)
 - certifi 2026.10.18, pillow 13.0.0 (requires Python ≥3.11; prod is 3.12.5), Django 5.2.17 all exist and are not yanked.
 - django-filer 3.3.0 and easy-thumbnails 2.10 do not cap pillow.
