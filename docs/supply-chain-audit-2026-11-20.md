@@ -11,11 +11,12 @@ Each bump was tested in `.venv` with the full suite (706 passed, 5 skipped, 1 xf
 | Django | 5.2.16 → 5.2.17 | committed (`a720d5e`) |
 | pillow | 12.3.0 → 13.0.0 | committed (`7ad63f8`) |
 | sqlparse | 0.5.4 → 0.6.0 | committed (its own commit after `7ad63f8`) |
+| geopy | 2.4.1 → 2.5.0 | committed (GHSA-mhvh-fq92-pfmr, ReDoS in `Point.from_string`; app only calls `distance()` on float tuples, `core/utils.py`) |
 | django-filer | 3.3.0 (unchanged) | **deferred**, see "django-filer decision" |
 
 Re-scan of the committed `requirements.txt` (OSV, after the certifi/Django/pillow commits, before sqlparse): certifi, Django and pillow showed 0 advisories. Still open then, counted with PYSEC duplicates: django-filer 1, geopy 2, pip 2, setuptools 3, sqlparse 10 (closed since), urllib3 14.
 
-**Still open:** urllib3 (6 HIGH, blocked by botocore cap), django-filer (MODERATE, deferred), geopy, setuptools, pip (MODERATE, rated not reachable on 10-12), JS dev tooling `source-map-js` (HIGH) and `postcss-selector-parser` (MODERATE).
+**Still open:** urllib3 (6 HIGH, blocked by botocore cap), django-filer (MODERATE, deferred), setuptools, pip (MODERATE, rated not reachable on 10-12), JS dev tooling `source-map-js` (HIGH) and `postcss-selector-parser` (MODERATE).
 
 ## Scope and method
 - `/supply-chain` over `requirements.txt` (35 pins) and `node/` (pnpm). `requirements-dev.txt` not CVE-scanned.
