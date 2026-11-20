@@ -76,6 +76,9 @@ Initially deferred (see "Why deferred" below); resolved the same day by bumping 
 
 **pip** 26.1.2 → 26.3 was a drop-in bump (suite 706 passed, 5 skipped, 1 xfailed).
 
+## Prod-parity check (2026-11-20)
+`scripts/verify_prod_parity.py` run by the user on the host after the pip, django-polymorphic 4.11.7 and setuptools 84.2.1 bumps (`main` at that point, django-filer 3.3.0): PASS ("requirements.txt alone is sufficient"; `manage.py check`, migrate on sqlite, one `GET /` returning 200). Limits: the host was macOS with Python 3.12.16 (prod pins 3.12.5 on Linux), so it did not check Linux wheel availability for every pin; it exercises startup and `/` only, not the filer admin. Not re-run for the JS lockfile commit (not Python).
+
 ## requirements-dev.txt scan (2026-11-20, not shipped to Railway)
 OSV query on the installed `.venv` versions of the 71 packages not in `requirements.txt` (the 10 direct dev pins plus transitive and stray packages). The 10 direct pins have 0 advisories. Four transitive/stray packages have advisories:
 
