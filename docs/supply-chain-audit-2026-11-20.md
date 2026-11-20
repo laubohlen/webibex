@@ -12,11 +12,14 @@ Each bump was tested in `.venv` with the full suite (706 passed, 5 skipped, 1 xf
 | pillow | 12.3.0 → 13.0.0 | committed (`7ad63f8`) |
 | sqlparse | 0.5.4 → 0.6.0 | committed (its own commit after `7ad63f8`) |
 | geopy | 2.4.1 → 2.5.0 | committed (GHSA-mhvh-fq92-pfmr, ReDoS in `Point.from_string`; app only calls `distance()` on float tuples, `core/utils.py`) |
-| django-filer | 3.3.0 (unchanged) | **deferred**, see "django-filer decision" |
+| pip | 26.1.2 → 26.3 | committed (GHSA-qwm4-qh6w-59xr / CVE-2026-13346, fixed in 26.2.0) |
+| django-polymorphic | 3.1.0 → 4.11.7 | committed (`bb7635f`); prerequisite for setuptools, see "setuptools decision" |
+| setuptools | 78.1.1 → 84.2.1 | committed (`7a0ca88`); fixes GHSA-h35f-9h28-mq5c and GHSA-xmj3-9gf7-h52w |
+| django-filer | 3.3.0 (unchanged) | **deferred ~mid-December**, parked on branch `wip/django-filer-3.6.0` (`751ec2e`), see "django-filer decision" |
 
 Re-scan of the committed `requirements.txt` (OSV, after the certifi/Django/pillow commits, before sqlparse): certifi, Django and pillow showed 0 advisories. Still open then, counted with PYSEC duplicates: django-filer 1, geopy 2, pip 2, setuptools 3, sqlparse 10 (closed since), urllib3 14.
 
-**Still open:** urllib3 (6 HIGH, blocked by botocore cap), django-filer (MODERATE, deferred), setuptools, pip (MODERATE, rated not reachable on 10-12), JS dev tooling `source-map-js` (HIGH) and `postcss-selector-parser` (MODERATE).
+**Still open:** urllib3 (6 HIGH, blocked by botocore cap), django-filer (MODERATE, deferred), JS dev tooling `source-map-js` (HIGH) and `postcss-selector-parser` (MODERATE).
 
 ## Scope and method
 - `/supply-chain` over `requirements.txt` (35 pins) and `node/` (pnpm). `requirements-dev.txt` not CVE-scanned.
@@ -56,7 +59,20 @@ urllib3 1.26.20 (6 HIGH, 1 MODERATE; 2.x only, blocked by botocore cap), sqlpars
 - **Breaking:** 3.6.0 no longer ships `static/filer/js/libs/` (`class`, `dropzone`, `fileuploader`, `jquery-ui`, `jquery.cookie`, `mediator`). The project overrides `templates/admin/filer/base_site.html`, `file/change_form.html` and `image/change_form.html`, which still load them; they would 404. Tests do not catch this.
 - The 28 overrides in `templates/admin/filer/` compared against the 3.3.0 wheel and the installed 3.6.0: 11 are identical to 3.6.0; 9 are unmodified 3.3.0 copies that 3.6.0 changed upstream (`actions`, `breadcrumbs`, `delete_selected_files_confirmation`, `file/change_form`, `folder/change_form`, `choose_copy_destination`, `choose_move_destination`, `image/change_form`, `clipboard`); 8 differ from 3.3.0 (`base_site`, `directory_listing`, `directory_table_list`, `directory_thumbnail_list`, `file_icon`, `detail_info`, `admin_file`, `admin_folder`). The differences look like leftovers from an older filer version rather than deliberate customizations: `base_site` is only reformatted; several files contain a stray `}` (`{% if max_filesize %}}data-max-filesize=...`, a pre-existing rendering bug); some use old-API calls (`file_icon size="160x160"`, `cms-icon-select`, `file.name`). Only commit `3c324dc add filer staticfiles` touches them; no recorded reason for the overrides.
 
+**Parked (2026-11-20, deferred ~mid-December by choice).** The 3.6.0 work is on branch `wip/django-filer-3.6.0` (`751ec2e`): `py-svg-hush==0.3.0` pin plus the `staticfiles/filer/**` refresh. It does **not** contain the `django-filer==3.6.0` pin itself (one line in `requirements.txt`) and does **not** contain `staticfiles/filer/js/dist/` (3 files: `filer-base.bundle.js`, `admin-file-widget.bundle.js`, `LICENSES.txt`) because `.gitignore:39` ignores `dist/`. Railway does not run `collectstatic`, so on resume add an exception (`!staticfiles/filer/js/dist/` or `git add -f`) and re-run `collectstatic --clear`. I did not confirm that the 3.6.0 templates load those bundles. `main` is on 3.3.0 and `.venv` matches it. A stray `dist/` left in the working tree makes the two `filer` oracle tests in `tests/core/test_static_assets_collectstatic.py` fail.
+
+**py-svg-hush 0.3.0 (vetted, not yet adopted).** Required by django-filer 3.6.0. `cp312` `manylinux_2_17_x86_64` wheel exists (prod is Python 3.12.5), so no source build; not yanked; no runtime dependencies; OSV lists no advisories. Four releases (0.1.0 to 0.3.0), 0.3.0 published 2026-02-13, single maintainer, native Rust extension that sanitizes untrusted SVG. Repository `github.com/jams2/py-svg-hush`; source and maintainer not inspected.
+
 **To do when picked up** (one commit each, in this order): (1) re-sync or delete the `templates/admin/filer/` overrides and click through the filer admin (upload, folder and thumbnail views, image change form) — deleting them is the smallest change but alters the admin UI; (2) bump `django-filer==3.6.0` and add `py-svg-hush==0.3.0`; (3) `collectstatic --clear` refresh of `staticfiles/filer/`, update the test docstring versions. Run the suite plus the `webibex.wsgi` prod-parity check from `CLAUDE.md`.
+
+## setuptools decision: done after django-polymorphic bump
+Initially deferred (see "Why deferred" below); resolved the same day by bumping `django-polymorphic` first. django-polymorphic 4.11.7 supports Django 4.2-6.1, Python >=3.10, has no `pkg_resources` use, and the app has no first-party polymorphic code (used only through django-filer, which caps it at `<5.0` from 3.6.0; 3.3.0 has no cap). Then setuptools 84.2.1 (not yanked, no OSV advisories). Suite 706 passed, 5 skipped, 1 xfailed after each bump; `makemigrations --check` clean. The only remaining `pkg_resources` importers in `.venv` are `_pytest/monkeypatch.py` and `werkzeug/testapp.py` (dev/test only). The `webibex.wsgi` prod-parity check was not run (needs host).
+
+**Advisories** (OSV, on 78.1.1): GHSA-h35f-9h28-mq5c (MODERATE; `MANIFEST.in` exclusion bypass in sdist via NFC/NFD collision on macOS APFS/HFS+; fixed 83.0.0) and GHSA-xmj3-9gf7-h52w (LOW; Windows path escape via `namespace_packages.txt` in legacy wheel install; fixed 84.1.0). Both are platform-specific (macOS/Windows); prod is Linux (Railway) and does not build sdists. Not verified against the deployed environment.
+
+**Why deferred.** The 83.0.0 and 84.1.0 wheels contain no `pkg_resources` (checked by listing the wheels). `django-polymorphic` 3.1.0 does `import pkg_resources` unconditionally (`polymorphic/__init__.py:9`), so `import polymorphic` would fail on prod; the test venv would show the same failure. Latest setuptools is 84.2.1.
+
+**pip** 26.1.2 → 26.3 was a drop-in bump (suite 706 passed, 5 skipped, 1 xfailed).
 
 ## Upgrade notes (checked 2026-11-20, PyPI metadata only)
 - certifi 2026.10.18, pillow 13.0.0 (requires Python ≥3.11; prod is 3.12.5), Django 5.2.17 all exist and are not yanked.
