@@ -15,11 +15,13 @@ Each bump was tested in `.venv` with the full suite (706 passed, 5 skipped, 1 xf
 | pip | 26.1.2 → 26.3 | committed (GHSA-qwm4-qh6w-59xr / CVE-2026-13346, fixed in 26.2.0) |
 | django-polymorphic | 3.1.0 → 4.11.7 | committed (`bb7635f`); prerequisite for setuptools, see "setuptools decision" |
 | setuptools | 78.1.1 → 84.2.1 | committed (`7a0ca88`); fixes GHSA-h35f-9h28-mq5c and GHSA-xmj3-9gf7-h52w |
+| source-map-js (node/, transitive of tailwindcss) | 1.2.1 → 1.2.4 | committed (`3366ce0`); GHSA-68fv-2mgg-jv7q (HIGH) |
+| postcss-selector-parser (node/, transitive) | 6.1.4 → 6.1.6 | committed (`3366ce0`); GHSA-rj75-hqrm-r3gf (MODERATE). `pnpm audit` now clean; Tailwind output byte-identical before/after |
 | django-filer | 3.3.0 (unchanged) | **deferred ~mid-December**, parked on branch `wip/django-filer-3.6.0` (`751ec2e`), see "django-filer decision" |
 
 Re-scan of the committed `requirements.txt` (OSV, after the certifi/Django/pillow commits, before sqlparse): certifi, Django and pillow showed 0 advisories. Still open then, counted with PYSEC duplicates: django-filer 1, geopy 2, pip 2, setuptools 3, sqlparse 10 (closed since), urllib3 14.
 
-**Still open:** urllib3 (6 HIGH, blocked by botocore cap), django-filer (MODERATE, deferred), JS dev tooling `source-map-js` (HIGH) and `postcss-selector-parser` (MODERATE).
+**Still open:** urllib3 (6 HIGH, blocked by botocore cap), django-filer (MODERATE, deferred). `requirements-dev.txt` was scanned later the same day, see "requirements-dev.txt scan".
 
 ## Scope and method
 - `/supply-chain` over `requirements.txt` (35 pins) and `node/` (pnpm). `requirements-dev.txt` not CVE-scanned.
@@ -73,6 +75,18 @@ Initially deferred (see "Why deferred" below); resolved the same day by bumping 
 **Why deferred.** The 83.0.0 and 84.1.0 wheels contain no `pkg_resources` (checked by listing the wheels). `django-polymorphic` 3.1.0 does `import pkg_resources` unconditionally (`polymorphic/__init__.py:9`), so `import polymorphic` would fail on prod; the test venv would show the same failure. Latest setuptools is 84.2.1.
 
 **pip** 26.1.2 → 26.3 was a drop-in bump (suite 706 passed, 5 skipped, 1 xfailed).
+
+## requirements-dev.txt scan (2026-11-20, not shipped to Railway)
+OSV query on the installed `.venv` versions of the 71 packages not in `requirements.txt` (the 10 direct dev pins plus transitive and stray packages). The 10 direct pins have 0 advisories. Four transitive/stray packages have advisories:
+
+| Package | Version | Advisories | Pulled in by | Assessment |
+|---|---|---|---|---|
+| cryptography | 49.0.0 | GHSA-g6cj-pr64-35w5 HIGH (PKCS#7 EnvelopedData Bleichenbacher oracle), fixed 50.0.0 | `moto` (test mocks) | dev/test only; not reachable from app code (not reviewed in detail) |
+| werkzeug | 3.1.8 | GHSA-g6x2-hccm-hh4m MODERATE (`safe_join` on Windows device names), fixed 3.1.9 | `moto` | dev/test only; Windows-specific |
+| msgpack | 1.2.1 | GHSA-j586-36cw-2gc2 HIGH (memory leak in C extension), fixed 1.2.3 | `CacheControl`, which is in neither requirements file | env extra, noise |
+| filelock | 3.32.0 | 12 advisories (2 HIGH, rest MODERATE/LOW; lock-file permission/symlink issues), fixed 4.2.1 | nothing requires it; in neither requirements file | env extra, noise |
+
+Not fixed: all four are outside `requirements.txt` and not installed on prod. `cryptography` and `werkzeug` are only constrained through `moto==4.2.14`; bumping them means pinning them in `requirements-dev.txt` or bumping moto, untested. Transitive versions of the dev tools are not pinned, so this scan describes this `.venv` only.
 
 ## Upgrade notes (checked 2026-11-20, PyPI metadata only)
 - certifi 2026.10.18, pillow 13.0.0 (requires Python ≥3.11; prod is 3.12.5), Django 5.2.17 all exist and are not yanked.
